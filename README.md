@@ -97,6 +97,24 @@ npm test
 `npm test` 跑的是不依赖 SillyTavern 的那部分：token 扫描器（逐字符喂流，断言派发时机）、
 ZIP 解包（stored / deflate 两种真实 fixture）、NAI 报文构造。
 
+`test/browser/timing.mjs` 验证本插件的核心主张本身 —— 它驱动一个真实的 SillyTavern
+页面，模拟含两个 `[img:]` 的流式回复，核对第一个 NovelAI 请求发出的时刻是否早于
+正文流结束的时刻。NovelAI 请求会被拦截，不消耗 Anlas。需要手动跑：
+
+```bash
+node server.js --port 8123 --listen false      # 在 SillyTavern 目录
+ST_URL=http://127.0.0.1:8123 node test/browser/timing.mjs
+```
+
+典型输出（正文流 236ms，第一张图在 49ms 就发出去了）：
+
+```
+  chunk  9 — [StreamDraw] dispatch @ +50ms — 1girl, smile, cafe
+  chunk 35 — [StreamDraw] dispatch @ +199ms — 2girls, rain, umbrella
+  正文流结束于 +236ms
+  NovelAI 请求发出时刻: +49ms, +201ms
+```
+
 ### 结构
 
 | 文件 | 职责 |
