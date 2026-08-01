@@ -11,6 +11,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { getPattern, getSettings, LOG_PREFIX } from './config.js';
+import { hydrateStartIndex } from './history.js';
 import * as cache from './cache.js';
 import * as pipeline from './pipeline.js';
 import { hash64, normalizePrompt } from './util.js';
@@ -331,15 +332,33 @@ export function hydrate(root) {
     }
 }
 
-/** 对整个聊天区注水 */
+/**
+ * 批量注水，只覆盖最近的若干层。
+ *
+ * 注水要对每个楼层做一次 TreeWalker 全文扫描，聊天记录攒到几百层之后全量扫
+ * 纯属浪费。深度由设置控制，最新一层永远包含在内。
+ *
+ * 注意这只约束**批量**注水。针对单个楼层的事件（编辑、swipe）走 hydrateMessage，
+ * 那是用户对那一层的明确操作，不受深度限制。
+ */
 export function hydrateAll() {
     if (!getSettings().enabled) return;
-    for (const node of document.querySelectorAll('#chat .mes .mes_text')) {
-        hydrate(/** @type {HTMLElement} */ (node));
+
+    const messages = document.querySelectorAll('#chat .mes');
+    const start = hydrateStartIndex(messages.length, getSettings().historyDepth);
+
+    for (let i = start; i < messages.length; i++) {
+        const node = messages[i].querySelector('.mes_text');
+        if (node) hydrate(/** @type {HTMLElement} */ (node));
     }
 }
 
-/** 对某个楼层注水 */
+/**
+ * 对某个楼层注水。
+ *
+ * 不受历史深度限制 —— 走到这里说明用户刚对这一层做了什么（编辑、swipe），
+ * 那就该响应，哪怕它已经翻到很旧的位置。
+ */
 export function hydrateMessage(messageId) {
     const node = document.querySelector(`#chat .mes[mesid="${messageId}"] .mes_text`);
     if (node) hydrate(/** @type {HTMLElement} */ (node));

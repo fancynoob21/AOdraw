@@ -80,6 +80,15 @@ SillyTavern → 扩展 → 安装扩展 → 填入本仓库的 Git URL。
 翻阅历史楼层时，**缓存里没有的图不会自动生成**，只显示一个「生成」按钮。
 滚一遍聊天记录就静默烧光 Anlas 是不可接受的。
 
+### 历史楼层渲染
+
+注水要对每个楼层做一次全文扫描，聊天记录攒到几百层之后每次刷新都全量扫是纯浪费。
+设置里的「历史楼层渲染」控制往回覆盖多少层，默认过去 5 层。
+
+**最新楼层永远渲染** —— 深度设的是*额外*往回的范围，所以哪怕选「只渲染最新楼层」，
+刚生成出来的那一层照样出图。超出范围的旧楼层会原样显示 `[img: ...]` 文本；
+如果你去编辑或 swipe 某个旧楼层，那一层会单独注水，不受深度限制。
+
 ## 限制
 
 - 只支持 `nai-diffusion-4-5-full`。不支持 V3、Curated，也不支持其他后端。
@@ -131,6 +140,7 @@ ST_URL=http://127.0.0.1:8123 node test/browser/timing.mjs
 | `src/nai-client.js` | NAI 4.5 Full 报文构造与请求 |
 | `src/validate.js` | 参数校验。留空/越界一律报错，绝不静默套用默认值 |
 | `src/sizes.js` | 尺寸选项与 Opus 免费额度判定 |
+| `src/history.js` | 历史楼层渲染深度 |
 | `src/unzip.js` | 极简 ZIP 读取器。NAI 返回的是 ZIP，这里用原生 `DecompressionStream` 解，不引 JSZip |
 | `src/cache.js` | IndexedDB：图片（Blob）+ prompt override |
 | `src/renderer.js` | slot 注入与幂等注水 |

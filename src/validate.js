@@ -32,6 +32,7 @@ export const FIELD_SPECS = {
     cooldownMax: { label: '冷却上限', type: 'int', min: 0, max: 600000 },
     timeout: { label: '超时', type: 'int', min: 5000, max: 600000 },
     ttlDays: { label: '缓存保留天数', type: 'int', min: 0, max: 3650 },
+    historyDepth: { label: '历史楼层渲染', type: 'int', min: -1, max: 9999 },
 };
 
 /** 进入 NAI 报文的字段。buildRequestBody 用这一组。 */

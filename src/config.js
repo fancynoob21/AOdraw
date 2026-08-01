@@ -17,6 +17,9 @@ export const DEFAULT_PATTERN = '\\[(?:img|图片)\\s*:\\s*([^\\]]+)\\]';
 export {
     DEFAULT_SIZE, FREE_STEPS_LIMIT, isFreeTier, SIZE_OPTIONS, sizeValueOf,
 } from './sizes.js';
+export {
+    DEFAULT_HISTORY_DEPTH, HISTORY_ALL, HISTORY_DEPTH_OPTIONS, hydrateStartIndex,
+} from './history.js';
 
 export const DEFAULT_SETTINGS = {
     enabled: true,
@@ -45,6 +48,7 @@ export const DEFAULT_SETTINGS = {
 
     // ── 渲染 ──
     livePreview: true,
+    historyDepth: 5, // 除最新楼层外，还渲染多少个过去楼层；-1 = 全部
 };
 
 /** 改名前的设置键。留着只为把 API Key 之类搬过来，之后可以删。 */

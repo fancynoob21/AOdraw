@@ -141,6 +141,14 @@
                 关掉只影响「图什么时候显示」。派发依然发生在流式期间，并行收益不变。
             </small>
 
+            <label for="aod_history_depth">历史楼层渲染</label>
+            <select id="aod_history_depth" class="text_pole"></select>
+            <small class="notes">
+                往回渲染多少层。最新楼层永远渲染，这里设的是<b>额外</b>往回覆盖的范围。
+                聊天记录很长时调小能省下每次刷新的全量扫描；超出范围的楼层会原样显示
+                <code>[img: ...]</code> 文本。
+            </small>
+
             <label for="aod_pattern">截取格式（正则）</label>
             <input id="aod_pattern" type="text" class="text_pole monospace">
             <small class="notes">

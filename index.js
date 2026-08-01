@@ -10,8 +10,8 @@
 import { renderExtensionTemplateAsync } from '../../../extensions.js';
 import * as cache from './src/cache.js';
 import {
-    DEFAULT_PATTERN, FREE_STEPS_LIMIT, getSettings, invalidatePattern, isFreeTier,
-    LOG_PREFIX, saveSettings, SIZE_OPTIONS, sizeValueOf,
+    DEFAULT_PATTERN, FREE_STEPS_LIMIT, getSettings, HISTORY_DEPTH_OPTIONS,
+    invalidatePattern, isFreeTier, LOG_PREFIX, saveSettings, SIZE_OPTIONS, sizeValueOf,
 } from './src/config.js';
 import { generate, testConnection } from './src/nai-client.js';
 import { formatErrors, validateFields } from './src/validate.js';
@@ -63,6 +63,7 @@ const FIELDS = [
     ['aod_timeout', 'timeout', 'int'],
     ['aod_ttl_days', 'ttlDays', 'int'],
     ['aod_live_preview', 'livePreview', 'bool'],
+    ['aod_history_depth', 'historyDepth', 'int'],
     ['aod_pattern', 'pattern', 'str'],
 ];
 
@@ -86,6 +87,9 @@ function writeControl(input, type, value) {
 
 function bindSettingsUI() {
     const settings = getSettings();
+
+    // 下拉的 option 必须先建好，否则后面 writeControl 设 value 会落空
+    populateHistorySelect();
 
     for (const [id, key, type] of FIELDS) {
         const input = document.getElementById(id);
@@ -113,7 +117,7 @@ function bindSettingsUI() {
             saveSettings();
             refreshValidation();
 
-            if (key === 'pattern' || key === 'enabled') hydrateAll();
+            if (key === 'pattern' || key === 'enabled' || key === 'historyDepth') hydrateAll();
             if (key === 'steps') updateSizeHint(); // 免费额度还取决于 steps
         });
     }
@@ -129,6 +133,18 @@ function bindSettingsUI() {
     document.getElementById('aod_clear_cache')?.addEventListener('click', onClearCache);
 
     void refreshCacheStats();
+}
+
+/** 历史深度是个下拉，选项要先填好才能被 writeControl 选中 */
+function populateHistorySelect() {
+    const select = document.getElementById('aod_history_depth');
+    if (!select || select.options.length) return;
+    for (const option of HISTORY_DEPTH_OPTIONS) {
+        const el = document.createElement('option');
+        el.value = String(option.value);
+        el.textContent = option.label;
+        select.appendChild(el);
+    }
 }
 
 /** 设置键 → 面板控件 id，用于把校验错误标回对应的输入框 */
