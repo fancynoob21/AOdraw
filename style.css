@@ -214,3 +214,43 @@
     gap: 8px;
     align-items: flex-end;
 }
+
+/* ── 参数校验 ──────────────────────────────────────────────────────────── */
+
+.aod-validation {
+    margin: 8px 0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(255, 100, 100, 0.09);
+    border: 1px solid rgba(255, 100, 100, 0.35);
+    color: #e57373;
+    font-size: 0.85em;
+}
+
+.aod-validation-title {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.aod-validation ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.aodraw-settings .aod-invalid {
+    border-color: #e57373 !important;
+    background: rgba(255, 100, 100, 0.07);
+}
+
+/* ── 测试生图预览 ──────────────────────────────────────────────────────── */
+
+.aod-test-preview {
+    margin-top: 8px;
+}
+
+.aod-test-preview img {
+    max-width: 100%;
+    max-height: 280px;
+    border-radius: 6px;
+    display: block;
+}

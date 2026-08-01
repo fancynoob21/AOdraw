@@ -13,7 +13,8 @@ import {
     DEFAULT_PATTERN, FREE_STEPS_LIMIT, getSettings, invalidatePattern, isFreeTier,
     LOG_PREFIX, saveSettings, SIZE_OPTIONS, sizeValueOf,
 } from './src/config.js';
-import { testConnection } from './src/nai-client.js';
+import { generate, testConnection } from './src/nai-client.js';
+import { formatErrors, validateFields } from './src/validate.js';
 import * as pipeline from './src/pipeline.js';
 import { hydrateAll } from './src/renderer.js';
 import { install as installWiring } from './src/wiring.js';
@@ -67,8 +68,14 @@ const FIELDS = [
 
 function readControl(input, type) {
     if (type === 'bool') return input.checked;
-    if (type === 'int') return parseInt(input.value, 10);
-    if (type === 'num') return parseFloat(input.value);
+    if (type === 'int' || type === 'num') {
+        // 留空就原样存空串，让校验层去报「不能为空」。
+        // 这里绝不能悄悄换成默认值 —— 那样面板显示的和实际用的就对不上了。
+        const raw = input.value.trim();
+        if (raw === '') return '';
+        const num = type === 'int' ? parseInt(raw, 10) : parseFloat(raw);
+        return Number.isFinite(num) ? num : raw;
+    }
     return input.value;
 }
 
@@ -91,13 +98,6 @@ function bindSettingsUI() {
 
         input.addEventListener('change', () => {
             const value = readControl(input, type);
-
-            // 数字框被清空时 parse 出 NaN，别把设置写坏
-            if ((type === 'int' || type === 'num') && !Number.isFinite(value)) {
-                writeControl(input, type, settings[key]);
-                return;
-            }
-
             settings[key] = value;
 
             if (key === 'pattern') {
@@ -111,6 +111,7 @@ function bindSettingsUI() {
             }
 
             saveSettings();
+            refreshValidation();
 
             if (key === 'pattern' || key === 'enabled') hydrateAll();
             if (key === 'steps') updateSizeHint(); // 免费额度还取决于 steps
@@ -118,6 +119,8 @@ function bindSettingsUI() {
     }
 
     bindSizeSelect();
+    bindTestGenerate();
+    refreshValidation();
 
     const guideline = document.getElementById('aod_guideline');
     if (guideline) guideline.value = IMG_GUIDELINE;
@@ -126,6 +129,110 @@ function bindSettingsUI() {
     document.getElementById('aod_clear_cache')?.addEventListener('click', onClearCache);
 
     void refreshCacheStats();
+}
+
+/** 设置键 → 面板控件 id，用于把校验错误标回对应的输入框 */
+const KEY_TO_ID = Object.fromEntries(FIELDS.map(([id, key]) => [key, id]));
+
+/**
+ * 跑一遍校验，把问题标在对应输入框上并汇总到顶部。
+ *
+ * 默认值只是面板的**预填充**，不是后台的兜底 —— 用户清空了某个格子，
+ * 就该看到报错，而不是让它在背后被换成一个自己没选过的值。
+ */
+function refreshValidation() {
+    const settings = getSettings();
+    const errors = validateFields(settings);
+
+    for (const [key, id] of Object.entries(KEY_TO_ID)) {
+        const input = document.getElementById(id);
+        if (!input) continue;
+        input.classList.toggle('aod-invalid', errors.some(e => e.key === key));
+    }
+
+    const banner = document.getElementById('aod_validation');
+    if (!banner) return;
+
+    if (!errors.length) {
+        banner.hidden = true;
+        banner.replaceChildren();
+        return;
+    }
+
+    banner.hidden = false;
+    banner.replaceChildren();
+    const title = document.createElement('div');
+    title.className = 'aod-validation-title';
+    title.textContent = '参数有误，生图会被拒绝：';
+    banner.appendChild(title);
+
+    const list = document.createElement('ul');
+    for (const e of errors) {
+        const li = document.createElement('li');
+        li.textContent = `${e.label} ${e.message}`;
+        list.appendChild(li);
+    }
+    banner.appendChild(list);
+}
+
+/**
+ * 「测试生图」：用面板上当前这套参数真的生成一张。
+ *
+ * 和「测试 Key」是两回事 —— 那个用固定的免费组合，只回答「Key 能不能用」；
+ * 这个回答「我现在这套参数能不能出图」，包括尺寸、steps、前缀词全都算进去。
+ */
+function bindTestGenerate() {
+    const button = document.getElementById('aod_test_generate');
+    const input = /** @type {HTMLInputElement} */ (document.getElementById('aod_test_prompt'));
+    const out = document.getElementById('aod_test_gen_result');
+    const preview = document.getElementById('aod_test_gen_preview');
+    if (!button || !input || !out || !preview) return;
+
+    button.addEventListener('click', async () => {
+        if (button.classList.contains('disabled')) return;
+
+        const settings = getSettings();
+
+        const errors = validateFields(settings);
+        if (errors.length) {
+            out.textContent = `❌ 参数有误：${formatErrors(errors)}`;
+            refreshValidation();
+            return;
+        }
+        if (!settings.apiKey) {
+            out.textContent = '❌ 请先填入 API Key';
+            return;
+        }
+
+        const prompt = input.value.trim() || input.placeholder;
+        const free = isFreeTier(settings);
+
+        button.classList.add('disabled');
+        preview.hidden = true;
+        preview.replaceChildren();
+        out.textContent = free ? '生成中（免费额度内）...' : '生成中（会消耗 Anlas）...';
+
+        const startedAt = Date.now();
+        try {
+            const { blob, meta } = await generate({ prompt, settings });
+            const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+
+            out.textContent = `✅ ${meta.width}×${meta.height} · seed ${meta.seed} · `
+                + `${(blob.size / 1024).toFixed(0)} KB · 用时 ${seconds}s`
+                + (free ? ' · 免费' : ' · 已消耗 Anlas');
+
+            const img = document.createElement('img');
+            // 预览是一次性的，页面刷新就没了；不进缓存，免得污染正文用的那套 hash
+            img.src = URL.createObjectURL(blob);
+            img.addEventListener('load', () => URL.revokeObjectURL(img.src), { once: true });
+            preview.appendChild(img);
+            preview.hidden = false;
+        } catch (e) {
+            out.textContent = `❌ ${e?.message || '生成失败'}`;
+        } finally {
+            button.classList.remove('disabled');
+        }
+    });
 }
 
 /**

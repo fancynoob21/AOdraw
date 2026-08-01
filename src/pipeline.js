@@ -224,9 +224,11 @@ async function drain() {
                     errorType: err.errorType,
                 });
 
-                // 认证和额度问题重试没有意义，直接把整条队列清掉，
-                // 免得后面几十张图挨个撞同一堵墙、每张都弹一次错。
-                if (err.errorType === ErrorType.AUTH || err.errorType === ErrorType.QUOTA) {
+                // 认证、额度、参数非法这三类，重试没有意义 —— 直接把整条队列清掉，
+                // 免得后面几十张图挨个撞同一堵墙、每张都弹一次同样的错。
+                if (err.errorType === ErrorType.AUTH
+                    || err.errorType === ErrorType.QUOTA
+                    || err.errorType === ErrorType.CONFIG) {
                     failRemaining(err);
                     break;
                 }

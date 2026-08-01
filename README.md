@@ -29,7 +29,12 @@
 
 SillyTavern → 扩展 → 安装扩展 → 填入本仓库的 Git URL。
 
-装好后在扩展设置里填 NovelAI API Key，点「测试」确认有效。
+装好后在扩展设置里填 NovelAI API Key，然后有两个不同的测试按钮：
+
+- **测试**（API Key 旁）—— 用固定的 1024×1024 / 1 step 组合验证 Key 能不能用。
+  Opus 免费额度内，且不受面板其他参数影响，所以参数填坏了也能用它排查。
+- **测试生图** —— 用**面板上当前这套参数**真的生成一张并显示出来。
+  回答的是「我这套参数出不出得来图」，而不只是「Key 有没有效」。
 
 ## 用法
 
@@ -81,6 +86,8 @@ SillyTavern → 扩展 → 安装扩展 → 填入本仓库的 Git URL。
 - 生成是**严格串行**的，图与图之间还有 5–10s 随机冷却 —— NovelAI 单个 API Key
   不支持并发。本插件的收益来自派发时机，不是并发数。
 - 依赖 `encode_tags` 保持关闭（SillyTavern 默认就是关的）。
+- 参数默认值只是面板的**预填充**，不是后台兜底。清空某个格子会直接报错并拒绝生图，
+  不会在背后悄悄换成一个你没选过的值。
 - 图片只存在浏览器本地，不写进聊天记录，也不导出。
 
 ## 开发
@@ -122,6 +129,8 @@ ST_URL=http://127.0.0.1:8123 node test/browser/timing.mjs
 | `src/scanner.js` | 流式 token 扫描器。全量重扫 + 位置去重，靠「正则要求闭合」保证不误派发 |
 | `src/pipeline.js` | 串行队列、缓存查询、同 prompt 去重、状态广播 |
 | `src/nai-client.js` | NAI 4.5 Full 报文构造与请求 |
+| `src/validate.js` | 参数校验。留空/越界一律报错，绝不静默套用默认值 |
+| `src/sizes.js` | 尺寸选项与 Opus 免费额度判定 |
 | `src/unzip.js` | 极简 ZIP 读取器。NAI 返回的是 ZIP，这里用原生 `DecompressionStream` 解，不引 JSZip |
 | `src/cache.js` | IndexedDB：图片（Blob）+ prompt override |
 | `src/renderer.js` | slot 注入与幂等注水 |

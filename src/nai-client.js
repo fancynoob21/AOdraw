@@ -8,6 +8,7 @@
 
 import { extractImageFromZip } from './unzip.js';
 import { joinTags } from './util.js';
+import { formatErrors, REQUEST_FIELDS, validateFields } from './validate.js';
 
 // 本模块刻意不 import config.js —— config 依赖 SillyTavern 的运行时，
 // 引进来就没法在 node 下单测报文构造了。设置一律由调用方传入。
@@ -27,6 +28,7 @@ export const ErrorType = {
     NETWORK: { code: 'network', label: '网络', desc: '连接失败或服务不可用' },
     TIMEOUT: { code: 'timeout', label: '超时', desc: '请求超时' },
     PARSE: { code: 'parse', label: '解析失败', desc: '响应不是预期的图片 ZIP' },
+    CONFIG: { code: 'config', label: '参数有误', desc: '设置里的参数缺失或非法' },
     ABORTED: { code: 'aborted', label: '已取消', desc: '请求被取消' },
     UNKNOWN: { code: 'unknown', label: '错误', desc: '未知错误' },
 };
@@ -103,8 +105,15 @@ function wrapFetchError(e) {
  * @returns {object}
  */
 export function buildRequestBody({ positive, negative, params, characterPrompts = [] }) {
-    const width = Number(params.width) || 1216;
-    const height = Number(params.height) || 832;
+    // 不做静默兜底。参数缺失或非法就报出来 —— 悄悄换成一个用户没选过的值，
+    // 会让生成结果和面板显示的参数对不上，且毫无提示。
+    const errors = validateFields(params, REQUEST_FIELDS);
+    if (errors.length) {
+        throw new NaiError(`参数有误 — ${formatErrors(errors)}`, ErrorType.CONFIG);
+    }
+
+    const width = Number(params.width);
+    const height = Number(params.height);
     const seed = Number(params.seed) >= 0
         ? Number(params.seed)
         : Math.floor(Math.random() * (MAX_SEED + 1));
@@ -135,11 +144,11 @@ export function buildRequestBody({ positive, negative, params, characterPrompts 
             params_version: 3,
             width,
             height,
-            scale: Number(params.scale) || 6,
+            scale: Number(params.scale),
             seed,
-            sampler: params.sampler || 'k_euler_ancestral',
-            noise_schedule: params.scheduler || 'karras',
-            steps: Number(params.steps) || 28,
+            sampler: params.sampler,
+            noise_schedule: params.scheduler,
+            steps: Number(params.steps),
             n_samples: 1,
             ucPreset: 0,
             qualityToggle: true,
@@ -283,15 +292,19 @@ const TEST_SIZE = 1024;
 export async function testConnection(apiKey, settings = {}) {
     if (!apiKey) throw new NaiError('请先填写 API Key', ErrorType.AUTH);
 
+    // 这是一个诊断请求，要能在面板参数填坏的时候照常验证 Key，
+    // 所以 sampler / scheduler 只在用户填了有效值时才沿用，否则用已知可用的值。
     const body = buildRequestBody({
         positive: 'test',
         negative: '',
         params: {
-            ...settings,
+            sampler: String(settings.sampler || '').trim() || 'k_euler_ancestral',
+            scheduler: String(settings.scheduler || '').trim() || 'karras',
             width: TEST_SIZE,
             height: TEST_SIZE,
             steps: 1,
             seed: 0,
+            scale: 5.5,
             varietyBoost: false,
         },
     });

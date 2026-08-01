@@ -46,8 +46,8 @@ describe('buildRequestBody', () => {
         const base = build({ varietyBoost: true }).parameters.skip_cfg_above_sigma;
         assert.ok(Math.abs(base - 58) < 1e-9, `expected ~58, got ${base}`);
 
-        // 面积翻倍 → sqrt(2) 倍
-        const doubled = build({ varietyBoost: true, width: 2432 }).parameters.skip_cfg_above_sigma;
+        // 面积翻倍 → sqrt(2) 倍。1216×1664 正好是 1216×832 的两倍面积。
+        const doubled = build({ varietyBoost: true, height: 1664 }).parameters.skip_cfg_above_sigma;
         assert.ok(Math.abs(doubled - 58 * Math.SQRT2) < 1e-9);
     });
 

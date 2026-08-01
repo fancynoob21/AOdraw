@@ -16,6 +16,8 @@
                 不必等正文写完。
             </small>
 
+            <div id="aod_validation" class="aod-validation" hidden></div>
+
             <hr>
 
             <h4>NovelAI</h4>
@@ -81,6 +83,20 @@
                 <input id="aod_variety_boost" type="checkbox">
                 <span>Variety Boost</span>
             </label>
+
+            <hr>
+
+            <h4>测试生图</h4>
+            <small class="notes">
+                用<b>上面这些参数</b>真的生成一张图。跟「测试」按钮不同 ——
+                那个只用固定的免费组合验证 Key 能不能用，这个验证你当前这套参数出得来图。
+            </small>
+            <div class="flex-container">
+                <input id="aod_test_prompt" type="text" class="text_pole flex1" placeholder="1girl, smile, cafe">
+                <div id="aod_test_generate" class="menu_button">生成</div>
+            </div>
+            <small id="aod_test_gen_result" class="notes"></small>
+            <div id="aod_test_gen_preview" class="aod-test-preview" hidden></div>
 
             <hr>
 
