@@ -1,0 +1,272 @@
+// ════════════════════════════════════════════════════════════════════════════
+// NovelAI 客户端 —— 只支持 nai-diffusion-4-5-full
+// ════════════════════════════════════════════════════════════════════════════
+//
+// 刻意不做 V3 / Curated 分支：V3 的报文结构完全不同（角色词压平进 input、
+// 没有 v4_prompt），双分支会让这个文件的复杂度翻倍而收益为零。
+// ════════════════════════════════════════════════════════════════════════════
+
+import { extractImageFromZip } from './unzip.js';
+import { joinTags } from './util.js';
+
+// 本模块刻意不 import config.js —— config 依赖 SillyTavern 的运行时，
+// 引进来就没法在 node 下单测报文构造了。设置一律由调用方传入。
+export const NAI_MODEL = 'nai-diffusion-4-5-full';
+
+const NAI_ENDPOINT = 'https://image.novelai.net/ai/generate-image';
+const MAX_SEED = 0xffffffff;
+const TEST_TIMEOUT = 15000;
+
+/** V4.5 的 variety boost 以 1216×832 为基准做缩放 */
+const VARIETY_BOOST_BASE_PIXELS = 1216 * 832;
+
+export const ErrorType = {
+    AUTH: { code: 'auth', label: '认证', desc: 'API Key 无效或过期' },
+    QUOTA: { code: 'quota', label: '额度', desc: 'Anlas 点数不足' },
+    BUSY: { code: 'busy', label: '繁忙', desc: '当前并发繁忙，请稍后重试' },
+    NETWORK: { code: 'network', label: '网络', desc: '连接失败或服务不可用' },
+    TIMEOUT: { code: 'timeout', label: '超时', desc: '请求超时' },
+    PARSE: { code: 'parse', label: '解析失败', desc: '响应不是预期的图片 ZIP' },
+    ABORTED: { code: 'aborted', label: '已取消', desc: '请求被取消' },
+    UNKNOWN: { code: 'unknown', label: '错误', desc: '未知错误' },
+};
+
+export class NaiError extends Error {
+    constructor(message, errorType = ErrorType.UNKNOWN) {
+        super(message);
+        this.name = 'NaiError';
+        this.errorType = errorType;
+    }
+}
+
+/**
+ * HTTP 状态码 → 有意义的错误类型。
+ * 分开是为了让 UI 能对不同失败给出不同的重试策略（额度不足重试也没用）。
+ */
+function parseApiError(status, text) {
+    switch (status) {
+        case 401: return new NaiError('API Key 无效', ErrorType.AUTH);
+        case 402: return new NaiError('Anlas 不足', ErrorType.QUOTA);
+        case 429: return new NaiError('并发繁忙，请稍后重试', ErrorType.BUSY);
+        case 500:
+        case 502:
+        case 503:
+        case 504: return new NaiError('NovelAI 服务不可用', ErrorType.NETWORK);
+        default: return new NaiError(`请求失败 ${status}${text ? ': ' + text.slice(0, 200) : ''}`, ErrorType.UNKNOWN);
+    }
+}
+
+function wrapFetchError(e) {
+    if (e instanceof NaiError) return e;
+    if (e?.name === 'AbortError') return new NaiError('请求超时', ErrorType.TIMEOUT);
+    if (String(e?.message || '').includes('Failed to fetch')) {
+        return new NaiError('网络错误', ErrorType.NETWORK);
+    }
+    return new NaiError(e?.message || '未知错误', ErrorType.UNKNOWN);
+}
+
+/**
+ * 构造 NAI 4.5 Full 的请求体。
+ *
+ * 有三个配置键在报文里换了名字，这是最容易踩的坑：
+ *   scheduler    → noise_schedule
+ *   decrisper    → dynamic_thresholding
+ *   varietyBoost → skip_cfg_above_sigma（是个计算值，不是布尔）
+ *
+ * @param {object} o
+ * @param {string} o.positive      完整正向 prompt（已含 positivePrefix）
+ * @param {string} o.negative      完整负向 prompt
+ * @param {object} o.params        来自设置的参数
+ * @param {Array}  [o.characterPrompts] 预留：多角色。MVP 恒为空数组，
+ *                                 后续填 `{ prompt, uc, center: {x, y} }`
+ * @returns {object}
+ */
+export function buildRequestBody({ positive, negative, params, characterPrompts = [] }) {
+    const width = Number(params.width) || 1216;
+    const height = Number(params.height) || 832;
+    const seed = Number(params.seed) >= 0
+        ? Number(params.seed)
+        : Math.floor(Math.random() * (MAX_SEED + 1));
+
+    const skipCfgAboveSigma = params.varietyBoost
+        ? Math.sqrt((width * height) / VARIETY_BOOST_BASE_PIXELS) * 58
+        : null;
+
+    // 任一角色被显式定位时才启用坐标模式
+    const useCoords = characterPrompts.some(
+        cp => cp.center && (cp.center.x !== 0.5 || cp.center.y !== 0.5),
+    );
+
+    const charCaptions = characterPrompts.map(cp => ({
+        char_caption: cp.prompt || '',
+        centers: [cp.center || { x: 0.5, y: 0.5 }],
+    }));
+    const negativeCharCaptions = characterPrompts.map(cp => ({
+        char_caption: cp.uc || '',
+        centers: [cp.center || { x: 0.5, y: 0.5 }],
+    }));
+
+    return {
+        action: 'generate',
+        input: String(positive || ''),
+        model: NAI_MODEL,
+        parameters: {
+            params_version: 3,
+            width,
+            height,
+            scale: Number(params.scale) || 6,
+            seed,
+            sampler: params.sampler || 'k_euler_ancestral',
+            noise_schedule: params.scheduler || 'karras',
+            steps: Number(params.steps) || 28,
+            n_samples: 1,
+            ucPreset: 0,
+            qualityToggle: true,
+            autoSmea: false,
+            cfg_rescale: 0,
+            dynamic_thresholding: false,
+            controlnet_strength: 1,
+            legacy: false,
+            legacy_v3_extend: false,
+            legacy_uc: false,
+            use_coords: useCoords,
+            normalize_reference_strength_multiple: true,
+            deliberate_euler_ancestral_bug: false,
+            prefer_brownian: true,
+            image_format: 'png',
+            skip_cfg_above_sigma: skipCfgAboveSigma,
+            characterPrompts: characterPrompts.map(cp => ({
+                prompt: cp.prompt || '',
+                uc: cp.uc || '',
+                center: cp.center || { x: 0.5, y: 0.5 },
+                enabled: true,
+            })),
+            v4_prompt: {
+                caption: {
+                    base_caption: String(positive || ''),
+                    char_captions: charCaptions,
+                },
+                use_coords: useCoords,
+                use_order: true,
+            },
+            v4_negative_prompt: {
+                caption: {
+                    base_caption: String(negative || ''),
+                    char_captions: negativeCharCaptions,
+                },
+                legacy_uc: false,
+            },
+            // v4_negative_prompt 之外仍要给这个平铺字段，NAI 两边都读
+            negative_prompt: String(negative || ''),
+        },
+    };
+}
+
+/**
+ * 生成一张图。
+ *
+ * @param {object} o
+ * @param {string} o.prompt   从正文截出来的 prompt（不含 positivePrefix）
+ * @param {object} o.settings 插件设置
+ * @param {AbortSignal} [o.signal]
+ * @returns {Promise<{ blob: Blob, meta: object }>}
+ */
+export async function generate({ prompt, settings, signal }) {
+    if (!settings.apiKey) {
+        throw new NaiError('请先在设置里填入 NovelAI API Key', ErrorType.AUTH);
+    }
+
+    const positive = joinTags(settings.positivePrefix, prompt);
+    const negative = settings.negativePrefix || '';
+    const body = buildRequestBody({ positive, negative, params: settings });
+
+    const controller = new AbortController();
+    const timeout = Number(settings.timeout) > 0 ? Number(settings.timeout) : 60000;
+    const timer = setTimeout(() => controller.abort(), timeout);
+    const onAbort = () => controller.abort();
+    signal?.addEventListener('abort', onAbort, { once: true });
+
+    try {
+        if (signal?.aborted) throw new NaiError('已取消', ErrorType.ABORTED);
+
+        const res = await fetch(NAI_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.apiKey}`,
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        });
+
+        if (!res.ok) {
+            throw parseApiError(res.status, await res.text().catch(() => ''));
+        }
+
+        const buffer = await res.arrayBuffer();
+        let blob;
+        try {
+            blob = await extractImageFromZip(buffer);
+        } catch (e) {
+            throw new NaiError(e?.message || 'ZIP 解析失败', ErrorType.PARSE);
+        }
+
+        return {
+            blob,
+            meta: {
+                seed: body.parameters.seed,
+                width: body.parameters.width,
+                height: body.parameters.height,
+                model: NAI_MODEL,
+            },
+        };
+    } catch (e) {
+        // 用户主动取消和超时长得很像（都是 AbortError），靠外部 signal 区分
+        if (signal?.aborted) throw new NaiError('已取消', ErrorType.ABORTED);
+        throw wrapFetchError(e);
+    } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
+    }
+}
+
+/**
+ * 探针式连接测试：64×64 / 1 step，几乎不耗 Anlas。
+ *
+ * 400 和 402 都说明 key 本身是有效的（只是参数被拒或额度不够），
+ * 只有 401 才是真的 key 无效。
+ *
+ * @param {string} apiKey
+ * @returns {Promise<{ success: true }>}
+ */
+export async function testConnection(apiKey) {
+    if (!apiKey) throw new NaiError('请先填写 API Key', ErrorType.AUTH);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TEST_TIMEOUT);
+
+    try {
+        const res = await fetch(NAI_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                input: 'test',
+                model: NAI_MODEL,
+                action: 'generate',
+                parameters: { width: 64, height: 64, steps: 1 },
+            }),
+            signal: controller.signal,
+        });
+
+        if (res.status === 401) throw new NaiError('API Key 无效', ErrorType.AUTH);
+        if (res.ok || res.status === 400 || res.status === 402) return { success: true };
+        throw parseApiError(res.status, await res.text().catch(() => ''));
+    } catch (e) {
+        throw wrapFetchError(e);
+    } finally {
+        clearTimeout(timer);
+    }
+}

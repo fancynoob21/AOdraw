@@ -1,0 +1,11 @@
+{
+    "name": "streamdraw",
+    "version": "0.1.0",
+    "description": "Intercept [img: ...] tokens mid-stream and generate NovelAI images in parallel with the reply text.",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "test": "node --test \"test/*.test.js\""
+    },
+    "license": "MIT"
+}
