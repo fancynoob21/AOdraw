@@ -13,7 +13,7 @@
 //     node server.js --port 8123 --listen false     # 在 SillyTavern 目录
 //     ST_URL=http://127.0.0.1:8123 node test/browser/timing.mjs
 //
-// 环境变量：ST_URL、CHROME、CDP_PORT
+// 环境变量：ST_URL、CHROME、CDP_PORT、EXT_DIR
 // ════════════════════════════════════════════════════════════════════════════
 
 import { spawn } from 'node:child_process';
@@ -25,6 +25,8 @@ const ST_URL = process.env.ST_URL || 'http://127.0.0.1:8123';
 const CDP_PORT = process.env.CDP_PORT || '9225';
 const CHROME = process.env.CHROME
     || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+// SillyTavern 用仓库名作为扩展文件夹名，本地开发的软链接名可能不同
+const EXT_DIR = process.env.EXT_DIR || 'AOdraw';
 
 const PROFILE = mkdtempSync(join(tmpdir(), 'sd-chrome-'));
 const chrome = spawn(CHROME, [
@@ -68,8 +70,8 @@ try {
 
     const out = await evaluate(`
         const { eventSource, event_types } = await import('/script.js');
-        const pipeline = await import('/scripts/extensions/third-party/StreamDraw/src/pipeline.js');
-        const { getSettings } = await import('/scripts/extensions/third-party/StreamDraw/src/config.js');
+        const pipeline = await import('/scripts/extensions/third-party/${EXT_DIR}/src/pipeline.js');
+        const { getSettings } = await import('/scripts/extensions/third-party/${EXT_DIR}/src/config.js');
 
         // 给个假 key 并把冷却清零，让 fetch 路径真的被走到
         const s = getSettings();

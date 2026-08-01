@@ -17,7 +17,19 @@ import * as pipeline from './src/pipeline.js';
 import { hydrateAll } from './src/renderer.js';
 import { install as installWiring } from './src/wiring.js';
 
-const EXT_FOLDER = 'third-party/StreamDraw';
+/**
+ * 从自身 URL 推导扩展目录名，而不是写死。
+ *
+ * SillyTavern 安装扩展时用的是**仓库名**作为文件夹名，所以这个名字取决于
+ * 用户从哪个 repo 装的，写死一定会在别人机器上加载不出设置面板。
+ * （相对 import 不受影响 —— 那是相对文件的，与文件夹叫什么无关。）
+ */
+function detectExtensionFolder() {
+    const m = new URL(import.meta.url).pathname.match(/\/scripts\/extensions\/(.+)\/index\.js$/);
+    return m ? m[1] : 'third-party/StreamDraw';
+}
+
+const EXT_FOLDER = detectExtensionFolder();
 
 export const IMG_GUIDELINE = `## 图片
 需要展示画面时，在正文中穿插以下格式：
