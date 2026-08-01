@@ -15,7 +15,7 @@ import * as cache from './cache.js';
 import * as pipeline from './pipeline.js';
 import { hash64, normalizePrompt } from './util.js';
 
-const SLOT_CLASS = 'sd-slot';
+const SLOT_CLASS = 'aod-slot';
 const LIVE_HYDRATE_INTERVAL = 200; // 流式期间最多 5fps，30fps 跑全量 TreeWalker 没必要
 
 let reentrancyGuard = false;
@@ -154,9 +154,9 @@ function paintSlot(slot) {
     if (!state || state.status === 'idle') {
         // 缓存里没有，也没人请求过。翻旧楼层时的常态：给个按钮让用户自己决定，
         // 绝不自动生成 —— 滚一遍历史记录就烧光 Anlas 是不可接受的。
-        const box = el('span', 'sd-placeholder');
+        const box = el('span', 'aod-placeholder');
         box.appendChild(icon('fa-image'));
-        const btn = el('button', 'sd-btn sd-act-generate', '生成');
+        const btn = el('button', 'aod-btn aod-act-generate', '生成');
         box.appendChild(btn);
         slot.appendChild(box);
         return;
@@ -164,14 +164,14 @@ function paintSlot(slot) {
 
     switch (state.status) {
         case 'queued': {
-            const box = el('span', 'sd-loading');
+            const box = el('span', 'aod-loading');
             box.appendChild(icon('fa-clock'));
             box.appendChild(el('span', null, `排队中 #${state.position ?? 1}`));
             slot.appendChild(box);
             break;
         }
         case 'waiting': {
-            const box = el('span', 'sd-loading');
+            const box = el('span', 'aod-loading');
             box.appendChild(icon('fa-clock'));
             const secs = Math.ceil((state.delayMs || 0) / 1000);
             box.appendChild(el('span', null, `排队中 #${state.position ?? 1} (${secs}s)`));
@@ -179,17 +179,17 @@ function paintSlot(slot) {
             break;
         }
         case 'generating': {
-            const box = el('span', 'sd-loading');
-            box.appendChild(icon('fa-palette sd-spin'));
+            const box = el('span', 'aod-loading');
+            box.appendChild(icon('fa-palette aod-spin'));
             const tail = state.position > 0 ? ` (${state.position} 排队)` : '';
             box.appendChild(el('span', null, `生成中${tail}...`));
             slot.appendChild(box);
             break;
         }
         case 'done': {
-            const wrap = el('span', 'sd-img-wrap');
+            const wrap = el('span', 'aod-img-wrap');
             const img = document.createElement('img');
-            img.className = 'sd-img';
+            img.className = 'aod-img';
             img.src = state.url;
             img.alt = state.prompt || '';
             img.loading = 'lazy';
@@ -199,10 +199,10 @@ function paintSlot(slot) {
             break;
         }
         case 'error': {
-            const box = el('span', 'sd-error');
+            const box = el('span', 'aod-error');
             box.appendChild(icon('fa-triangle-exclamation'));
             box.appendChild(el('span', null, state.error || '生成失败'));
-            box.appendChild(el('button', 'sd-btn sd-act-generate', '重试'));
+            box.appendChild(el('button', 'aod-btn aod-act-generate', '重试'));
             slot.appendChild(box);
             break;
         }
@@ -223,21 +223,21 @@ function stateSignature(state) {
 
 /** @param {HTMLElement} slot */
 function buildToolbar(slot) {
-    const bar = el('span', 'sd-toolbar');
+    const bar = el('span', 'aod-toolbar');
 
     const mk = (cls, iconName, title) => {
-        const b = el('button', `sd-tool ${cls}`);
+        const b = el('button', `aod-tool ${cls}`);
         b.title = title;
         b.appendChild(icon(iconName));
         return b;
     };
 
-    bar.appendChild(mk('sd-act-reroll', 'fa-rotate', '重绘（同 prompt）'));
-    bar.appendChild(mk('sd-act-edit', 'fa-pen', '修改 prompt'));
+    bar.appendChild(mk('aod-act-reroll', 'fa-rotate', '重绘（同 prompt）'));
+    bar.appendChild(mk('aod-act-edit', 'fa-pen', '修改 prompt'));
     if (slot.dataset.overridden === '1') {
-        bar.appendChild(mk('sd-act-reset', 'fa-rotate-left', '复位为正文原始 prompt'));
+        bar.appendChild(mk('aod-act-reset', 'fa-rotate-left', '复位为正文原始 prompt'));
     }
-    bar.appendChild(mk('sd-act-pin', 'fa-thumbtack', '长期保存（不被缓存清理）'));
+    bar.appendChild(mk('aod-act-pin', 'fa-thumbtack', '长期保存（不被缓存清理）'));
     return bar;
 }
 
@@ -274,11 +274,11 @@ function ensurePanelButton(root) {
     const mes = root.closest('.mes');
     if (!mes) return;
     const holder = mes.querySelector('.mes_buttons .extraMesButtons');
-    if (!holder || holder.querySelector('.sd_message_panel')) return;
+    if (!holder || holder.querySelector('.aod_message_panel')) return;
 
     const btn = document.createElement('div');
-    btn.className = 'mes_button sd_message_panel fa-solid fa-images';
-    btn.title = 'StreamDraw：本楼图片';
+    btn.className = 'mes_button aod_message_panel fa-solid fa-images';
+    btn.title = 'AOdraw：本楼图片';
     holder.prepend(btn);
 }
 

@@ -34,7 +34,7 @@ function onClick(e) {
     if (!target?.closest) return;
 
     // 楼层级：打开本楼管理面板
-    const panelBtn = target.closest('.sd_message_panel');
+    const panelBtn = target.closest('.aod_message_panel');
     if (panelBtn) {
         const messageId = panelBtn.closest('.mes')?.getAttribute('mesid');
         if (messageId != null) {
@@ -45,10 +45,10 @@ function onClick(e) {
         return;
     }
 
-    const button = target.closest('.sd-btn, .sd-tool');
+    const button = target.closest('.aod-btn, .aod-tool');
     if (!button) return;
 
-    const slot = button.closest('.sd-slot');
+    const slot = button.closest('.aod-slot');
     if (!slot) return;
 
     e.preventDefault();
@@ -61,11 +61,11 @@ function onClick(e) {
         prompt: slot.dataset.prompt || '',
     };
 
-    if (button.classList.contains('sd-act-generate')) void doGenerate(ctx);
-    else if (button.classList.contains('sd-act-reroll')) void doReroll(ctx);
-    else if (button.classList.contains('sd-act-edit')) void doEdit(ctx);
-    else if (button.classList.contains('sd-act-reset')) void doReset(ctx);
-    else if (button.classList.contains('sd-act-pin')) void doPin(ctx, button);
+    if (button.classList.contains('aod-act-generate')) void doGenerate(ctx);
+    else if (button.classList.contains('aod-act-reroll')) void doReroll(ctx);
+    else if (button.classList.contains('aod-act-edit')) void doEdit(ctx);
+    else if (button.classList.contains('aod-act-reset')) void doReset(ctx);
+    else if (button.classList.contains('aod-act-pin')) void doPin(ctx, button);
 }
 
 async function doGenerate({ prompt }) {
@@ -107,7 +107,7 @@ async function doReset({ oh }) {
 async function doPin({ h }, button) {
     const ok = await cache.pin(h, true);
     if (ok) {
-        button.classList.add('sd-pinned');
+        button.classList.add('aod-pinned');
         button.title = '已标记为长期保存';
     } else {
         console.warn(LOG_PREFIX, 'pin failed: no cache record for', h);

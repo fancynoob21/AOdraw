@@ -127,7 +127,7 @@ try {
         if (c) { chunk = +c[1]; continue; }
         const m = line.match(/^SDTEST_MARK (\w+)=(\d+)/);
         if (m) { marks[m[1]] = +m[2]; continue; }
-        if (line.includes('[StreamDraw] dispatch @')) {
+        if (line.includes('[AOdraw] dispatch @')) {
             dispatchChunks.push({ chunk, line: line.trim() });
         }
     }

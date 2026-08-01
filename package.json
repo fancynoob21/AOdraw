@@ -1,5 +1,5 @@
 {
-    "name": "streamdraw",
+    "name": "aodraw",
     "version": "0.1.0",
     "description": "Intercept [img: ...] tokens mid-stream and generate NovelAI images in parallel with the reply text.",
     "type": "module",

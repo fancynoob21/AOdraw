@@ -31,9 +31,9 @@ export async function openPanel(messageId) {
     const mesText = document.querySelector(`#chat .mes[mesid="${messageId}"] .mes_text`);
     if (!mesText) return;
 
-    const slots = [...mesText.querySelectorAll('.sd-slot')];
+    const slots = [...mesText.querySelectorAll('.aod-slot')];
     const container = document.createElement('div');
-    container.className = 'sd-panel';
+    container.className = 'aod-panel';
 
     const title = document.createElement('h3');
     title.textContent = `本楼图片 (${slots.length})`;
@@ -41,7 +41,7 @@ export async function openPanel(messageId) {
 
     if (!slots.length) {
         const empty = document.createElement('p');
-        empty.className = 'sd-panel-empty';
+        empty.className = 'aod-panel-empty';
         empty.textContent = '这一层没有可生成的图片标记。';
         container.appendChild(empty);
     }
@@ -63,11 +63,11 @@ function buildRow(slot) {
     const state = pipeline.peek(h);
 
     const row = document.createElement('div');
-    row.className = 'sd-panel-row';
+    row.className = 'aod-panel-row';
 
     // ── 缩略图 ──
     const thumb = document.createElement('div');
-    thumb.className = 'sd-panel-thumb';
+    thumb.className = 'aod-panel-thumb';
     if (state?.status === 'done' && state.url) {
         const img = document.createElement('img');
         img.src = state.url;
@@ -80,15 +80,15 @@ function buildRow(slot) {
 
     // ── 信息 ──
     const info = document.createElement('div');
-    info.className = 'sd-panel-info';
+    info.className = 'aod-panel-info';
 
     const promptEl = document.createElement('div');
-    promptEl.className = 'sd-panel-prompt';
+    promptEl.className = 'aod-panel-prompt';
     promptEl.textContent = prompt;
     info.appendChild(promptEl);
 
     const meta = document.createElement('div');
-    meta.className = 'sd-panel-meta';
+    meta.className = 'aod-panel-meta';
     const bits = [`hash ${h.slice(0, 8)}`, STATUS_LABEL[state?.status || 'idle']];
     if (overridden) bits.push('已修改');
     if (state?.error) bits.push(state.error);
@@ -97,7 +97,7 @@ function buildRow(slot) {
 
     if (overridden) {
         const original = document.createElement('div');
-        original.className = 'sd-panel-original';
+        original.className = 'aod-panel-original';
         original.textContent = `正文原文: ${raw}`;
         info.appendChild(original);
     }
@@ -106,11 +106,11 @@ function buildRow(slot) {
 
     // ── 操作 ──
     const actions = document.createElement('div');
-    actions.className = 'sd-panel-actions';
+    actions.className = 'aod-panel-actions';
 
     const mkBtn = (label, handler) => {
         const b = document.createElement('button');
-        b.className = 'menu_button sd-panel-btn';
+        b.className = 'menu_button aod-panel-btn';
         b.textContent = label;
         b.addEventListener('click', async () => {
             b.disabled = true;

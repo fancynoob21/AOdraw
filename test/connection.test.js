@@ -5,6 +5,7 @@ import { afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { testConnection } from '../src/nai-client.js';
+import { isFreeTier } from '../src/sizes.js';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const realFetch = globalThis.fetch;
@@ -55,17 +56,27 @@ describe('testConnection', () => {
         assert.ok(body.parameters.v4_negative_prompt.caption);
     });
 
-    it('探针用 1 step 和最小尺寸，避免浪费 Anlas', async () => {
+    it('探针落在 Opus 免费额度内', async () => {
         const { calls } = stubFetch(zipResponse);
         await testConnection('pst-fake');
 
         const p = calls[0].body.parameters;
+        // 1024×1024 且 steps ≤ 28 → Opus 订阅下测试连接是免费的
+        assert.equal(p.width, 1024);
+        assert.equal(p.height, 1024);
         assert.equal(p.steps, 1);
-        assert.equal(p.width, 512);
-        assert.equal(p.height, 512);
-        // 尺寸必须是 64 的倍数
-        assert.equal(p.width % 64, 0);
-        assert.equal(p.height % 64, 0);
+        assert.ok(isFreeTier({ width: p.width, height: p.height, steps: p.steps }));
+    });
+
+    it('探针不会被用户设置里的尺寸带偏', async () => {
+        const { calls } = stubFetch(zipResponse);
+        // 就算用户选了收费的大尺寸，探针也必须固定用免费组合
+        await testConnection('pst-fake', { width: 1536, height: 1024, steps: 50 });
+
+        const p = calls[0].body.parameters;
+        assert.equal(p.width, 1024);
+        assert.equal(p.height, 1024);
+        assert.equal(p.steps, 1);
     });
 
     it('沿用用户设置里的 sampler / scheduler', async () => {

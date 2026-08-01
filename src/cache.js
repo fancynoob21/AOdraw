@@ -11,7 +11,7 @@
 
 import { LOG_PREFIX } from './config.js';
 
-const DB_NAME = 'streamdraw';
+const DB_NAME = 'aodraw';
 const DB_VERSION = 1;
 const STORE_IMAGES = 'images';
 const STORE_OVERRIDES = 'overrides';

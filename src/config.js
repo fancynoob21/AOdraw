@@ -6,11 +6,17 @@ import { extension_settings } from '../../../../extensions.js';
 import { saveSettingsDebounced } from '../../../../../script.js';
 import { compilePattern } from './util.js';
 
-export const EXT_ID = 'StreamDraw';
-export const LOG_PREFIX = '[StreamDraw]';
+export const EXT_ID = 'AOdraw';
+export const LOG_PREFIX = '[AOdraw]';
 
 /** 默认截取格式。必须含捕获组 1 = prompt，且必须要求闭合 `]`。 */
 export const DEFAULT_PATTERN = '\\[(?:img|图片)\\s*:\\s*([^\\]]+)\\]';
+
+// 尺寸相关的纯逻辑放在 sizes.js 里（那边不依赖 SillyTavern，可单测），
+// 这里转出去，调用方不必关心它住在哪
+export {
+    DEFAULT_SIZE, FREE_STEPS_LIMIT, isFreeTier, SIZE_OPTIONS, sizeValueOf,
+} from './sizes.js';
 
 export const DEFAULT_SETTINGS = {
     enabled: true,
@@ -20,11 +26,11 @@ export const DEFAULT_SETTINGS = {
     apiKey: '',
     positivePrefix: 'best quality, amazing quality, very aesthetic, absurdres,',
     negativePrefix: 'lowres, bad anatomy, bad hands, missing fingers, extra digits, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry',
-    steps: 28,
-    scale: 6,
-    width: 1216,
+    steps: 28,        // Opus 免费额度的上限，超过就开始计费
+    scale: 5.5,       // NovelAI 界面里叫 Prompt Guidance
+    width: 1216,      // 由尺寸下拉写入，不单独暴露输入框
     height: 832,
-    seed: -1, // -1 = 每次随机
+    seed: -1,         // -1 = 每次随机
     sampler: 'k_euler_ancestral',
     scheduler: 'karras', // → 报文里的 noise_schedule
     varietyBoost: false, // → 报文里的 skip_cfg_above_sigma（计算值）
@@ -41,10 +47,28 @@ export const DEFAULT_SETTINGS = {
     livePreview: true,
 };
 
+/** 改名前的设置键。留着只为把 API Key 之类搬过来，之后可以删。 */
+const LEGACY_EXT_ID = 'StreamDraw';
+
+/** scale 的旧默认值。等于它说明用户没动过，可以安全地跟着新默认值走。 */
+const LEGACY_DEFAULT_SCALE = 6;
+
 /** @returns {typeof DEFAULT_SETTINGS} */
 export function getSettings() {
     if (!extension_settings[EXT_ID]) {
-        extension_settings[EXT_ID] = structuredClone(DEFAULT_SETTINGS);
+        // 从改名前的键搬迁。主要是为了不让用户重填 API Key。
+        const legacy = extension_settings[LEGACY_EXT_ID];
+        if (legacy && typeof legacy === 'object') {
+            extension_settings[EXT_ID] = { ...structuredClone(DEFAULT_SETTINGS), ...legacy };
+            // 用户没改过 scale 的话，让它跟上新的默认值 5.5；
+            // 改过就尊重用户的选择。
+            if (Number(legacy.scale) === LEGACY_DEFAULT_SCALE) {
+                extension_settings[EXT_ID].scale = DEFAULT_SETTINGS.scale;
+            }
+            delete extension_settings[LEGACY_EXT_ID];
+        } else {
+            extension_settings[EXT_ID] = structuredClone(DEFAULT_SETTINGS);
+        }
     }
     // 补齐新增字段（用户从旧版本升上来时）
     for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {

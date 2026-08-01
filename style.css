@@ -1,8 +1,8 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   StreamDraw
+   AOdraw
    ══════════════════════════════════════════════════════════════════════════ */
 
-.sd-slot {
+.aod-slot {
     display: inline-block;
     margin: 8px 0;
     max-width: 100%;
@@ -11,9 +11,9 @@
 
 /* ── 占位 / 加载 / 错误 ─────────────────────────────────────────────────── */
 
-.sd-placeholder,
-.sd-loading,
-.sd-error {
+.aod-placeholder,
+.aod-loading,
+.aod-error {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -23,20 +23,20 @@
     line-height: 1.4;
 }
 
-.sd-placeholder {
+.aod-placeholder {
     background: rgba(128, 128, 128, 0.08);
     border: 1px dashed rgba(128, 128, 128, 0.35);
     color: var(--SmartThemeBodyColor);
     opacity: 0.75;
 }
 
-.sd-loading {
+.aod-loading {
     background: rgba(76, 154, 255, 0.09);
     border: 1px solid rgba(76, 154, 255, 0.28);
     color: var(--SmartThemeBodyColor);
 }
 
-.sd-error {
+.aod-error {
     background: rgba(255, 100, 100, 0.09);
     border: 1px dashed rgba(255, 100, 100, 0.35);
     color: #e57373;
@@ -44,15 +44,15 @@
     max-width: 380px;
 }
 
-.sd-spin {
-    animation: sd-spin 1.1s linear infinite;
+.aod-spin {
+    animation: aod-spin 1.1s linear infinite;
 }
 
-@keyframes sd-spin {
+@keyframes aod-spin {
     to { transform: rotate(360deg); }
 }
 
-.sd-btn {
+.aod-btn {
     padding: 3px 10px;
     border-radius: 4px;
     border: 1px solid rgba(128, 128, 128, 0.4);
@@ -62,26 +62,26 @@
     cursor: pointer;
 }
 
-.sd-btn:hover {
+.aod-btn:hover {
     background: rgba(128, 128, 128, 0.25);
 }
 
 /* ── 图片与工具条 ──────────────────────────────────────────────────────── */
 
-.sd-img-wrap {
+.aod-img-wrap {
     position: relative;
     display: inline-block;
     line-height: 0;
 }
 
-.sd-img {
+.aod-img {
     max-width: min(420px, 100%);
     max-height: 60vh;
     border-radius: 6px;
     display: block;
 }
 
-.sd-toolbar {
+.aod-toolbar {
     position: absolute;
     top: 6px;
     right: 6px;
@@ -92,13 +92,13 @@
     pointer-events: none;
 }
 
-.sd-img-wrap:hover .sd-toolbar,
-.sd-toolbar:focus-within {
+.aod-img-wrap:hover .aod-toolbar,
+.aod-toolbar:focus-within {
     opacity: 1;
     pointer-events: auto;
 }
 
-.sd-tool {
+.aod-tool {
     width: 26px;
     height: 26px;
     display: inline-flex;
@@ -113,25 +113,25 @@
     line-height: 1;
 }
 
-.sd-tool:hover {
+.aod-tool:hover {
     background: rgba(0, 0, 0, 0.8);
 }
 
-.sd-tool.sd-pinned {
+.aod-tool.aod-pinned {
     background: rgba(212, 160, 23, 0.85);
 }
 
 /* ── 楼层管理面板 ──────────────────────────────────────────────────────── */
 
-.sd-panel h3 {
+.aod-panel h3 {
     margin: 0 0 12px;
 }
 
-.sd-panel-empty {
+.aod-panel-empty {
     opacity: 0.7;
 }
 
-.sd-panel-row {
+.aod-panel-row {
     display: flex;
     gap: 12px;
     align-items: flex-start;
@@ -139,7 +139,7 @@
     border-bottom: 1px solid rgba(128, 128, 128, 0.2);
 }
 
-.sd-panel-thumb {
+.aod-panel-thumb {
     flex: 0 0 96px;
     width: 96px;
     min-height: 64px;
@@ -153,38 +153,38 @@
     overflow: hidden;
 }
 
-.sd-panel-thumb img {
+.aod-panel-thumb img {
     width: 100%;
     height: auto;
     display: block;
 }
 
-.sd-panel-info {
+.aod-panel-info {
     flex: 1 1 auto;
     min-width: 0;
 }
 
-.sd-panel-prompt {
+.aod-panel-prompt {
     word-break: break-word;
     font-size: 0.9em;
 }
 
-.sd-panel-meta,
-.sd-panel-original {
+.aod-panel-meta,
+.aod-panel-original {
     margin-top: 4px;
     font-size: 0.78em;
     opacity: 0.65;
     word-break: break-word;
 }
 
-.sd-panel-actions {
+.aod-panel-actions {
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.sd-panel-btn {
+.aod-panel-btn {
     font-size: 0.8em;
     padding: 3px 8px;
     white-space: nowrap;
@@ -192,25 +192,25 @@
 
 /* ── 设置面板 ──────────────────────────────────────────────────────────── */
 
-.streamdraw-settings .notes {
+.aodraw-settings .notes {
     display: block;
     margin: 4px 0 8px;
     opacity: 0.7;
     font-size: 0.85em;
 }
 
-.streamdraw-settings label:not(.checkbox_label) {
+.aodraw-settings label:not(.checkbox_label) {
     display: block;
     margin-top: 8px;
     font-size: 0.9em;
 }
 
-.streamdraw-settings .monospace {
+.aodraw-settings .monospace {
     font-family: var(--monoFontFamily, monospace);
     font-size: 0.85em;
 }
 
-.streamdraw-settings .flex-container {
+.aodraw-settings .flex-container {
     gap: 8px;
     align-items: flex-end;
 }

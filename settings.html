@@ -1,14 +1,14 @@
-<div class="streamdraw-settings">
+<div class="aodraw-settings">
     <div class="inline-drawer">
         <div class="inline-drawer-toggle inline-drawer-header">
-            <b>StreamDraw</b>
+            <b>AOdraw</b>
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
 
         <div class="inline-drawer-content">
 
             <label class="checkbox_label">
-                <input id="sd_enabled" type="checkbox">
+                <input id="aod_enabled" type="checkbox">
                 <span>启用</span>
             </label>
             <small class="notes">
@@ -19,52 +19,45 @@
             <hr>
 
             <h4>NovelAI</h4>
-            <label for="sd_api_key">API Key</label>
+            <label for="aod_api_key">API Key</label>
             <div class="flex-container">
-                <input id="sd_api_key" type="password" class="text_pole flex1" placeholder="pst-...">
-                <div id="sd_test_key" class="menu_button" title="发一个 64×64 / 1 step 的探针请求">测试</div>
+                <input id="aod_api_key" type="password" class="text_pole flex1" placeholder="pst-...">
+                <div id="aod_test_key" class="menu_button" title="发一张 1024×1024 / 1 step 的真实请求（Opus 免费额度内）">测试</div>
             </div>
-            <small id="sd_test_result" class="notes"></small>
+            <small id="aod_test_result" class="notes"></small>
 
             <small class="notes">模型固定为 <code>nai-diffusion-4-5-full</code>。</small>
 
-            <label for="sd_positive">正向前缀</label>
-            <textarea id="sd_positive" class="text_pole textarea_compact" rows="2"></textarea>
+            <label for="aod_positive">正向前缀</label>
+            <textarea id="aod_positive" class="text_pole textarea_compact" rows="2"></textarea>
 
-            <label for="sd_negative">负向前缀</label>
-            <textarea id="sd_negative" class="text_pole textarea_compact" rows="3"></textarea>
+            <label for="aod_negative">负向前缀</label>
+            <textarea id="aod_negative" class="text_pole textarea_compact" rows="3"></textarea>
 
-            <div class="flex-container">
-                <div class="flex1">
-                    <label for="sd_width">宽</label>
-                    <input id="sd_width" type="number" class="text_pole" min="64" max="2048" step="64">
-                </div>
-                <div class="flex1">
-                    <label for="sd_height">高</label>
-                    <input id="sd_height" type="number" class="text_pole" min="64" max="2048" step="64">
-                </div>
-            </div>
+            <label for="aod_size">尺寸</label>
+            <select id="aod_size" class="text_pole"></select>
+            <small id="aod_size_hint" class="notes"></small>
 
             <div class="flex-container">
                 <div class="flex1">
-                    <label for="sd_steps">Steps</label>
-                    <input id="sd_steps" type="number" class="text_pole" min="1" max="50">
+                    <label for="aod_steps">Steps</label>
+                    <input id="aod_steps" type="number" class="text_pole" min="1" max="50">
                 </div>
                 <div class="flex1">
-                    <label for="sd_scale">Scale</label>
-                    <input id="sd_scale" type="number" class="text_pole" min="0" max="10" step="0.1">
+                    <label for="aod_scale">Prompt Guidance</label>
+                    <input id="aod_scale" type="number" class="text_pole" min="0" max="10" step="0.1">
                 </div>
                 <div class="flex1">
-                    <label for="sd_seed">Seed</label>
-                    <input id="sd_seed" type="number" class="text_pole" min="-1">
+                    <label for="aod_seed">Seed</label>
+                    <input id="aod_seed" type="number" class="text_pole" min="-1">
                 </div>
             </div>
             <small class="notes">Seed 填 <code>-1</code> 表示每次随机。</small>
 
             <div class="flex-container">
                 <div class="flex1">
-                    <label for="sd_sampler">Sampler</label>
-                    <select id="sd_sampler" class="text_pole">
+                    <label for="aod_sampler">Sampler</label>
+                    <select id="aod_sampler" class="text_pole">
                         <option value="k_euler_ancestral">k_euler_ancestral</option>
                         <option value="k_euler">k_euler</option>
                         <option value="k_dpmpp_2s_ancestral">k_dpmpp_2s_ancestral</option>
@@ -74,8 +67,8 @@
                     </select>
                 </div>
                 <div class="flex1">
-                    <label for="sd_scheduler">Noise schedule</label>
-                    <select id="sd_scheduler" class="text_pole">
+                    <label for="aod_scheduler">Noise schedule</label>
+                    <select id="aod_scheduler" class="text_pole">
                         <option value="karras">karras</option>
                         <option value="native">native</option>
                         <option value="exponential">exponential</option>
@@ -85,7 +78,7 @@
             </div>
 
             <label class="checkbox_label">
-                <input id="sd_variety_boost" type="checkbox">
+                <input id="aod_variety_boost" type="checkbox">
                 <span>Variety Boost</span>
             </label>
 
@@ -99,41 +92,41 @@
 
             <div class="flex-container">
                 <div class="flex1">
-                    <label for="sd_cooldown_min">冷却下限 (ms)</label>
-                    <input id="sd_cooldown_min" type="number" class="text_pole" min="0" step="500">
+                    <label for="aod_cooldown_min">冷却下限 (ms)</label>
+                    <input id="aod_cooldown_min" type="number" class="text_pole" min="0" step="500">
                 </div>
                 <div class="flex1">
-                    <label for="sd_cooldown_max">冷却上限 (ms)</label>
-                    <input id="sd_cooldown_max" type="number" class="text_pole" min="0" step="500">
+                    <label for="aod_cooldown_max">冷却上限 (ms)</label>
+                    <input id="aod_cooldown_max" type="number" class="text_pole" min="0" step="500">
                 </div>
                 <div class="flex1">
-                    <label for="sd_timeout">超时 (ms)</label>
-                    <input id="sd_timeout" type="number" class="text_pole" min="5000" step="1000">
+                    <label for="aod_timeout">超时 (ms)</label>
+                    <input id="aod_timeout" type="number" class="text_pole" min="5000" step="1000">
                 </div>
             </div>
 
-            <label for="sd_ttl_days">缓存保留天数</label>
-            <input id="sd_ttl_days" type="number" class="text_pole" min="0" step="1">
+            <label for="aod_ttl_days">缓存保留天数</label>
+            <input id="aod_ttl_days" type="number" class="text_pole" min="0" step="1">
             <small class="notes">填 <code>0</code> 表示永不过期。被标记为「长期保存」的图不受此设置影响。</small>
 
             <div class="flex-container">
-                <div id="sd_cache_stats" class="flex1 notes"></div>
-                <div id="sd_clear_cache" class="menu_button">清空缓存</div>
+                <div id="aod_cache_stats" class="flex1 notes"></div>
+                <div id="aod_clear_cache" class="menu_button">清空缓存</div>
             </div>
 
             <hr>
 
             <h4>高级</h4>
             <label class="checkbox_label">
-                <input id="sd_live_preview" type="checkbox">
+                <input id="aod_live_preview" type="checkbox">
                 <span>流式期间就显示图片</span>
             </label>
             <small class="notes">
                 关掉只影响「图什么时候显示」。派发依然发生在流式期间，并行收益不变。
             </small>
 
-            <label for="sd_pattern">截取格式（正则）</label>
-            <input id="sd_pattern" type="text" class="text_pole monospace">
+            <label for="aod_pattern">截取格式（正则）</label>
+            <input id="aod_pattern" type="text" class="text_pole monospace">
             <small class="notes">
                 必须包含捕获组 1（即 prompt），并且必须要求闭合定界符 ——
                 否则半截 token 会在流式过程中被误派发。填错会自动回退到默认值。
@@ -143,7 +136,7 @@
 
             <h4>提示词规范</h4>
             <small class="notes">复制下面这段放进角色卡或预设，让模型按这个格式输出。</small>
-            <textarea id="sd_guideline" class="text_pole textarea_compact monospace" rows="8" readonly></textarea>
+            <textarea id="aod_guideline" class="text_pole textarea_compact monospace" rows="8" readonly></textarea>
         </div>
     </div>
 </div>

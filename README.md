@@ -1,4 +1,4 @@
-# StreamDraw
+# AOdraw
 
 在 SillyTavern **流式回复的过程中**截获正文里的 `[img: ...]`，立刻开始生成 NovelAI 图片 ——
 不必等正文写完。
@@ -86,9 +86,9 @@ SillyTavern → 扩展 → 安装扩展 → 填入本仓库的 Git URL。
 ## 开发
 
 ```bash
-git clone <repo> ~/Documents/StreamDraw
-ln -s ~/Documents/StreamDraw \
-      <SillyTavern>/public/scripts/extensions/third-party/StreamDraw
+git clone <repo> ~/Documents/AOdraw
+ln -s ~/Documents/AOdraw \
+      <SillyTavern>/public/scripts/extensions/third-party/AOdraw
 npm test
 ```
 
@@ -109,8 +109,8 @@ ST_URL=http://127.0.0.1:8123 node test/browser/timing.mjs
 典型输出（正文流 236ms，第一张图在 49ms 就发出去了）：
 
 ```
-  chunk  9 — [StreamDraw] dispatch @ +50ms — 1girl, smile, cafe
-  chunk 35 — [StreamDraw] dispatch @ +199ms — 2girls, rain, umbrella
+  chunk  9 — [AOdraw] dispatch @ +50ms — 1girl, smile, cafe
+  chunk 35 — [AOdraw] dispatch @ +199ms — 2girls, rain, umbrella
   正文流结束于 +236ms
   NovelAI 请求发出时刻: +49ms, +201ms
 ```
