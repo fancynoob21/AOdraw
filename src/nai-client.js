@@ -40,19 +40,40 @@ export class NaiError extends Error {
 }
 
 /**
+ * 从 NovelAI 的错误响应里抠出人能看懂的那句话。
+ * 它一般回 `{"statusCode":500,"message":"..."}`，但也可能是纯文本。
+ */
+function extractApiMessage(text) {
+    if (!text) return '';
+    try {
+        const json = JSON.parse(text);
+        const msg = json?.message || json?.error || '';
+        if (msg) return String(msg).slice(0, 300);
+    } catch { /* 不是 JSON，按纯文本处理 */ }
+    return String(text).slice(0, 300);
+}
+
+/**
  * HTTP 状态码 → 有意义的错误类型。
  * 分开是为了让 UI 能对不同失败给出不同的重试策略（额度不足重试也没用）。
+ *
+ * 5xx 一定要把服务端原话带出来。NovelAI 对**报文形状不合法**的请求也回 500，
+ * 光显示「服务不可用」会让人以为是对面挂了，实际上是我们自己发错了。
  */
 function parseApiError(status, text) {
+    const detail = extractApiMessage(text);
+    const suffix = detail ? `: ${detail}` : '';
+
     switch (status) {
         case 401: return new NaiError('API Key 无效', ErrorType.AUTH);
         case 402: return new NaiError('Anlas 不足', ErrorType.QUOTA);
         case 429: return new NaiError('并发繁忙，请稍后重试', ErrorType.BUSY);
+        case 400: return new NaiError(`请求被拒绝 (400)${suffix}`, ErrorType.UNKNOWN);
         case 500:
         case 502:
         case 503:
-        case 504: return new NaiError('NovelAI 服务不可用', ErrorType.NETWORK);
-        default: return new NaiError(`请求失败 ${status}${text ? ': ' + text.slice(0, 200) : ''}`, ErrorType.UNKNOWN);
+        case 504: return new NaiError(`NovelAI 返回 ${status}${suffix}`, ErrorType.NETWORK);
+        default: return new NaiError(`请求失败 ${status}${suffix}`, ErrorType.UNKNOWN);
     }
 }
 
@@ -230,17 +251,44 @@ export async function generate({ prompt, settings, signal }) {
     }
 }
 
+/** 探针用的最小尺寸。必须是 64 的倍数，且要落在 V4.5 接受的范围内。 */
+const TEST_SIZE = 512;
+
 /**
- * 探针式连接测试：64×64 / 1 step，几乎不耗 Anlas。
+ * 连接测试：发一个 512×512 / 1 step 的真实请求。
  *
- * 400 和 402 都说明 key 本身是有效的（只是参数被拒或额度不够），
- * 只有 401 才是真的 key 无效。
+ * 关键是**必须复用 buildRequestBody**。曾经这里手搓过一个
+ * `parameters: { width, height, steps }` 的精简报文 —— 那是 V3 的形状，
+ * 而 model 是 V4.5，缺了 params_version / v4_prompt / sampler 这些必填字段，
+ * NovelAI 直接回 500，于是一个完全有效的 Key 被报成「服务不可用」。
+ * 让探针和真实生成走同一条构造路径，形状就不可能再对不上。
+ *
+ * 顺带把返回的 ZIP 也解一遍：这样「测试通过」意味着认证、报文形状、
+ * ZIP 解包三段全都验证过了，而不只是认证。
+ *
+ * 1 step / 512×512 在 Opus 订阅下是免费额度内的；其他付费档位会消耗
+ * 极少量 Anlas。
  *
  * @param {string} apiKey
- * @returns {Promise<{ success: true }>}
+ * @param {object} [settings] 用当前设置里的 sampler / scheduler 等，
+ *                            这样测试覆盖的就是用户真正会用的那套参数
+ * @returns {Promise<{ success: true, bytes: number, seed: number }>}
  */
-export async function testConnection(apiKey) {
+export async function testConnection(apiKey, settings = {}) {
     if (!apiKey) throw new NaiError('请先填写 API Key', ErrorType.AUTH);
+
+    const body = buildRequestBody({
+        positive: 'test',
+        negative: '',
+        params: {
+            ...settings,
+            width: TEST_SIZE,
+            height: TEST_SIZE,
+            steps: 1,
+            seed: 0,
+            varietyBoost: false,
+        },
+    });
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TEST_TIMEOUT);
@@ -252,18 +300,19 @@ export async function testConnection(apiKey) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`,
             },
-            body: JSON.stringify({
-                input: 'test',
-                model: NAI_MODEL,
-                action: 'generate',
-                parameters: { width: 64, height: 64, steps: 1 },
-            }),
+            body: JSON.stringify(body),
             signal: controller.signal,
         });
 
         if (res.status === 401) throw new NaiError('API Key 无效', ErrorType.AUTH);
-        if (res.ok || res.status === 400 || res.status === 402) return { success: true };
-        throw parseApiError(res.status, await res.text().catch(() => ''));
+        // 额度不足说明 Key 本身是好的，只是没钱了 —— 对「这个 Key 能不能用」
+        // 这个问题来说算通过，UI 那边会单独提示。
+        if (res.status === 402) return { success: true, bytes: 0, seed: -1 };
+        if (!res.ok) throw parseApiError(res.status, await res.text().catch(() => ''));
+
+        const buffer = await res.arrayBuffer();
+        const blob = await extractImageFromZip(buffer);
+        return { success: true, bytes: blob.size, seed: body.parameters.seed };
     } catch (e) {
         throw wrapFetchError(e);
     } finally {

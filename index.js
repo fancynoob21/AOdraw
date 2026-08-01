@@ -130,11 +130,15 @@ async function onTestKey() {
     const button = document.getElementById('sd_test_key');
     if (!out) return;
 
-    out.textContent = '测试中...';
+    out.textContent = '测试中（会真的生成一张 512×512 / 1 step 的图）...';
     button?.classList.add('disabled');
     try {
-        await testConnection(getSettings().apiKey);
-        out.textContent = '✅ Key 有效';
+        const settings = getSettings();
+        const r = await testConnection(settings.apiKey, settings);
+        out.textContent = r.bytes > 0
+            // 走通到这里意味着认证、报文形状、ZIP 解包三段全部验证过了
+            ? `✅ Key 有效，已成功生成并解包一张图（${(r.bytes / 1024).toFixed(0)} KB）`
+            : '⚠️ Key 有效，但 Anlas 不足';
     } catch (e) {
         out.textContent = `❌ ${e?.message || '失败'}`;
     } finally {
