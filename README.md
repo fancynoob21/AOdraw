@@ -113,6 +113,18 @@ npm test
 `npm test` 跑的是不依赖 SillyTavern 的那部分：token 扫描器（逐字符喂流，断言派发时机）、
 ZIP 解包（stored / deflate 两种真实 fixture）、NAI 报文构造。
 
+`test/browser/streaming.mjs` 是最重要的那个 —— 它用一个假的 OpenAI 兼容端点
+（`test/browser/mock-llm.mjs`）驱动 SillyTavern 跑一次**完整的真实流式生成**，
+于是 `onProgressStreaming`、`messageFormatting`、每 tick 的 innerHTML 重写全都会真的跑起来。
+凡是「我们改 DOM」和「ST 重写 DOM」之间的冲突，只有这个测试看得见：
+
+```bash
+node test/browser/streaming.mjs                  # 整段 innerHTML 重写路径
+STREAM_FADE_IN=1 node test/browser/streaming.mjs # morphdom + 分词 span 路径
+```
+
+两条渲染路径都要跑 —— 它们的失败方式完全不同。
+
 `test/browser/timing.mjs` 验证本插件的核心主张本身 —— 它驱动一个真实的 SillyTavern
 页面，模拟含两个 `[img:]` 的流式回复，核对第一个 NovelAI 请求发出的时刻是否早于
 正文流结束的时刻。NovelAI 请求会被拦截，不消耗 Anlas。需要手动跑：

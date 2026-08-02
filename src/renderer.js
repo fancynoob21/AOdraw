@@ -17,7 +17,6 @@ import * as pipeline from './pipeline.js';
 import { hash64, normalizePrompt } from './util.js';
 
 const SLOT_CLASS = 'aod-slot';
-const LIVE_HYDRATE_INTERVAL = 200; // 流式期间最多 5fps，30fps 跑全量 TreeWalker 没必要
 
 let reentrancyGuard = false;
 
@@ -59,49 +58,76 @@ function injectSlots(root) {
     const re = getPattern();
     if (!re) return false;
 
-    /** @type {Text[]} */
-    const targets = [];
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    // 把所有文本节点拼成一整段，并记下每个节点在其中的偏移。
+    //
+    // 不能逐个文本节点去匹配：开了 stream_fade_in 之后，SillyTavern 的
+    // segmentTextInElement 会把每个文本节点按词拆成一堆 <span class="text_segment">，
+    // 于是没有任何单个节点装得下完整的 `[img: ...]`，正则一次都匹配不上，
+    // slot 从头到尾都不会出现。
+    /** @type {{ node: Text, start: number, end: number, skip: boolean }[]} */
+    const pieces = [];
+    let text = '';
 
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
         const node = /** @type {Text} */ (walker.currentNode);
-        if (!node.data || node.data.indexOf('[') === -1) continue;
-        // 代码块里的 [img:] 是用户在讨论语法，不该被吃掉
-        if (node.parentElement?.closest(`pre, code, .${SLOT_CLASS}`)) continue;
-
-        re.lastIndex = 0;
-        if (re.test(node.data)) targets.push(node);
+        const data = node.data || '';
+        // 代码块里的 [img:] 是用户在讨论语法，不该被吃掉。
+        // 但它的文本仍要计入偏移，否则前后两段会被拼在一起，凭空匹配出跨代码块的假 token。
+        const skip = !!node.parentElement?.closest(`pre, code, .${SLOT_CLASS}`);
+        pieces.push({ node, start: text.length, end: text.length + data.length, skip });
+        text += data;
     }
 
-    if (!targets.length) return false;
+    if (!pieces.length || text.indexOf('[') === -1) return false;
 
-    for (const node of targets) {
-        const frag = document.createDocumentFragment();
-        const text = node.data;
-        let last = 0;
-        let m;
+    /** @type {{ start: number, end: number, prompt: string }[]} */
+    const matches = [];
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+        if (m[0].length === 0) { re.lastIndex++; continue; }
+        const prompt = normalizePrompt(m[1]);
+        if (!prompt) continue;
+        matches.push({ start: m.index, end: m.index + m[0].length, prompt });
+    }
 
-        re.lastIndex = 0;
-        while ((m = re.exec(text)) !== null) {
-            if (m[0].length === 0) { re.lastIndex++; continue; }
+    if (!matches.length) return false;
 
-            const prompt = normalizePrompt(m[1]);
-            if (!prompt) continue;
-
-            if (m.index > last) {
-                frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+    /** 定位某个全局偏移落在哪个文本节点的第几位 */
+    const locate = (pos, isEnd) => {
+        for (const p of pieces) {
+            if (isEnd ? (pos > p.start && pos <= p.end) : (pos >= p.start && pos < p.end)) {
+                return { node: p.node, offset: pos - p.start };
             }
-            frag.appendChild(createSlot(prompt));
-            last = m.index + m[0].length;
         }
+        return null;
+    };
 
-        if (last < text.length) {
-            frag.appendChild(document.createTextNode(text.slice(last)));
-        }
-        node.replaceWith(frag);
+    const overlapsSkipped = (start, end) =>
+        pieces.some(p => p.skip && p.start < end && p.end > start);
+
+    let changed = false;
+
+    // 从后往前替换：先动后面的，前面那些 match 的偏移和节点引用才不会失效
+    for (let i = matches.length - 1; i >= 0; i--) {
+        const { start, end, prompt } = matches[i];
+        if (overlapsSkipped(start, end)) continue;
+
+        const from = locate(start, false);
+        const to = locate(end, true);
+        if (!from || !to) continue;
+
+        // Range 天生就能跨节点跨元素，正好对付被切碎的 text_segment
+        const range = document.createRange();
+        range.setStart(from.node, from.offset);
+        range.setEnd(to.node, to.offset);
+        range.deleteContents();
+        range.insertNode(createSlot(prompt));
+        changed = true;
     }
 
-    return true;
+    return changed;
 }
 
 /**
@@ -371,36 +397,35 @@ export function hydrateLast() {
     if (last) hydrate(/** @type {HTMLElement} */ (last));
 }
 
-// ── 流式期间的节流注水 ────────────────────────────────────────────────────
+// ── 流式期间的注水 ────────────────────────────────────────────────────────
 
-let liveTimer = null;
-let liveLastRun = 0;
+let liveFrame = 0;
 
 /**
- * 流式期间调用。节流到 5fps —— 正文每秒最多被重绘 30 次，跟着跑全量 TreeWalker
- * 纯属浪费，而人眼也分辨不出这点差别。
+ * 流式期间调用，用 rAF 合并，**每帧最多一次**。
+ *
+ * 这里曾经是 200ms 节流，想的是「30fps 全量 TreeWalker 没必要，人眼也看不出
+ * 差别」。实测完全错了：ST 每个 tick 都会重写 innerHTML 把我们的 slot 抹掉，
+ * 而 streaming_fps 默认 30、可以调到 60。节流到 5fps 意味着每 6～12 次重写
+ * 我们才补一次，用户看到的绝大多数帧都是 `[img: ...]` 原文，slot 只是偶尔闪
+ * 一下。真实轨迹长这样（1 = 有 slot）：
+ *
+ *     0001000100010101010001010101010
+ *
+ * rAF 的时机正好：ST 的重绘发生在 STREAM_TOKEN_RECEIVED 之后的同一个任务里，
+ * 所以从监听器里排的 rAF 一定在重绘之后才跑 —— 同一帧内补回来，看不到闪烁。
  */
 export function scheduleLiveHydrate() {
-    const now = Date.now();
-    const elapsed = now - liveLastRun;
-
-    if (elapsed >= LIVE_HYDRATE_INTERVAL) {
-        liveLastRun = now;
+    if (liveFrame) return;
+    liveFrame = requestAnimationFrame(() => {
+        liveFrame = 0;
         hydrateLast();
-        return;
-    }
-    if (liveTimer) return;
-
-    liveTimer = setTimeout(() => {
-        liveTimer = null;
-        liveLastRun = Date.now();
-        hydrateLast();
-    }, LIVE_HYDRATE_INTERVAL - elapsed);
+    });
 }
 
 export function cancelLiveHydrate() {
-    if (liveTimer) {
-        clearTimeout(liveTimer);
-        liveTimer = null;
+    if (liveFrame) {
+        cancelAnimationFrame(liveFrame);
+        liveFrame = 0;
     }
 }

@@ -60,6 +60,9 @@ export function install() {
 
     // ── 会话结束 ──
     on(event_types.GENERATION_ENDED, () => {
+        // 是否需要兜底，必须在关掉会话之前判断
+        const needsFallback = !!session && session.dispatched === 0;
+
         if (session) {
             console.debug(
                 `${LOG_PREFIX} GENERATION_ENDED @ +${Date.now() - session.startedAt}ms，` +
@@ -67,9 +70,15 @@ export function install() {
             );
         }
         endSession();
-        // 非流式兜底：流式关闭时 STREAM_TOKEN_RECEIVED 根本不触发，
+
+        // 非流式兜底：关掉流式传输时 STREAM_TOKEN_RECEIVED 根本不触发，
         // 这里对最后一层的全文补扫一次，退化成传统的串行行为但功能不缺。
-        scanLastMessage();
+        //
+        // 只在流式一张都没派发时才跑。之前是无条件跑的，结果流式期间失败的图
+        // （比如撞上 429）会在这里被重新派发一次 —— 两个 token 打出三次请求。
+        // 失败的重试应该由用户点「重试」，不该在每次生成结束时偷偷再来一遍。
+        if (needsFallback) scanLastMessage();
+
         hydrateAll();
     });
 
