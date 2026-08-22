@@ -28,7 +28,11 @@
             </div>
             <small id="aod_test_result" class="notes"></small>
 
-            <small class="notes">模型固定为 <code>nai-diffusion-4-5-full</code>。</small>
+            <label for="aod_model">模型</label>
+            <select id="aod_model" class="text_pole"></select>
+            <small class="notes">
+                这几个都用真实 API 验证过，且共用同一套报文格式。不支持 V3。
+            </small>
 
             <label for="aod_positive">正向前缀</label>
             <textarea id="aod_positive" class="text_pole textarea_compact" rows="2"></textarea>

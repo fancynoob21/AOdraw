@@ -21,6 +21,7 @@
 
 /** @type {Record<string, FieldSpec>} */
 export const FIELD_SPECS = {
+    model: { label: '模型', type: 'string' },
     width: { label: '宽', type: 'int', min: 64, max: 2048 },
     height: { label: '高', type: 'int', min: 64, max: 2048 },
     steps: { label: 'Steps', type: 'int', min: 1, max: 50 },
@@ -37,7 +38,7 @@ export const FIELD_SPECS = {
 
 /** 进入 NAI 报文的字段。buildRequestBody 用这一组。 */
 export const REQUEST_FIELDS = [
-    'width', 'height', 'steps', 'scale', 'seed', 'sampler', 'scheduler',
+    'model', 'width', 'height', 'steps', 'scale', 'seed', 'sampler', 'scheduler',
 ];
 
 /** 面板上所有需要校验的字段 */

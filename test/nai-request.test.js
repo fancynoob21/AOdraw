@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { buildRequestBody, NAI_MODEL } from '../src/nai-client.js';
+import { buildRequestBody } from '../src/nai-client.js';
+import { DEFAULT_MODEL, MODEL_OPTIONS } from '../src/models.js';
 
 const PARAMS = {
+    model: DEFAULT_MODEL,
     width: 1216,
     height: 832,
     scale: 6,
@@ -23,9 +25,27 @@ function build(overrides = {}) {
 }
 
 describe('buildRequestBody', () => {
-    it('固定使用 4.5 Full', () => {
-        assert.equal(build().model, NAI_MODEL);
-        assert.equal(NAI_MODEL, 'nai-diffusion-4-5-full');
+    it('默认模型是 V5 Full', () => {
+        assert.equal(DEFAULT_MODEL, 'nai-diffusion-5-full');
+        assert.equal(build().model, 'nai-diffusion-5-full');
+    });
+
+    it('模型原样透传，不被改写', () => {
+        for (const option of MODEL_OPTIONS) {
+            assert.equal(build({ model: option.value }).model, option.value);
+        }
+    });
+
+    it('所有可选模型共用同一套报文形状（所以不需要按模型分支）', () => {
+        const shapes = MODEL_OPTIONS.map(o => {
+            const body = build({ model: o.value });
+            return JSON.stringify({
+                keys: Object.keys(body).sort(),
+                paramKeys: Object.keys(body.parameters).sort(),
+                paramsVersion: body.parameters.params_version,
+            });
+        });
+        assert.equal(new Set(shapes).size, 1, '不同模型产出了不同的报文形状');
     });
 
     it('三处配置键 → 报文键改名', () => {

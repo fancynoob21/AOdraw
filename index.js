@@ -11,7 +11,8 @@ import { renderExtensionTemplateAsync } from '../../../extensions.js';
 import * as cache from './src/cache.js';
 import {
     DEFAULT_PATTERN, FREE_STEPS_LIMIT, getSettings, HISTORY_DEPTH_OPTIONS,
-    invalidatePattern, isFreeTier, LOG_PREFIX, saveSettings, SIZE_OPTIONS, sizeValueOf,
+    invalidatePattern, isFreeTier, LOG_PREFIX, MODEL_OPTIONS, saveSettings,
+    SIZE_OPTIONS, sizeValueOf,
 } from './src/config.js';
 import { generate, testConnection } from './src/nai-client.js';
 import { formatErrors, validateFields } from './src/validate.js';
@@ -49,6 +50,7 @@ export const IMG_GUIDELINE = `## 图片
 const FIELDS = [
     ['aod_enabled', 'enabled', 'bool'],
     ['aod_api_key', 'apiKey', 'str'],
+    ['aod_model', 'model', 'str'],
     ['aod_positive', 'positivePrefix', 'str'],
     ['aod_negative', 'negativePrefix', 'str'],
     // width / height 不在这里 —— 它们由 aod_size 下拉一起写入，见 bindSizeSelect()
@@ -90,6 +92,7 @@ function bindSettingsUI() {
 
     // 下拉的 option 必须先建好，否则后面 writeControl 设 value 会落空
     populateHistorySelect();
+    populateModelSelect();
 
     for (const [id, key, type] of FIELDS) {
         const input = document.getElementById(id);
@@ -133,6 +136,18 @@ function bindSettingsUI() {
     document.getElementById('aod_clear_cache')?.addEventListener('click', onClearCache);
 
     void refreshCacheStats();
+}
+
+/** 模型下拉，同样要先填好选项 */
+function populateModelSelect() {
+    const select = document.getElementById('aod_model');
+    if (!select || select.options.length) return;
+    for (const option of MODEL_OPTIONS) {
+        const el = document.createElement('option');
+        el.value = option.value;
+        el.textContent = `${option.label} · ${option.value}`;
+        select.appendChild(el);
+    }
 }
 
 /** 历史深度是个下拉，选项要先填好才能被 writeControl 选中 */

@@ -1,18 +1,20 @@
 // ════════════════════════════════════════════════════════════════════════════
-// NovelAI 客户端 —— 只支持 nai-diffusion-4-5-full
+// NovelAI 客户端 —— V5 / V4.5
 // ════════════════════════════════════════════════════════════════════════════
 //
-// 刻意不做 V3 / Curated 分支：V3 的报文结构完全不同（角色词压平进 input、
-// 没有 v4_prompt），双分支会让这个文件的复杂度翻倍而收益为零。
+// 支持的模型见 models.js。它们共用同一套报文形状，所以这里没有按模型分支。
+//
+// 刻意不支持 V3：V3 的报文结构完全不同（角色词压平进 input、没有 v4_prompt），
+// 那才需要一整条独立代码路径，复杂度翻倍而收益为零。
 // ════════════════════════════════════════════════════════════════════════════
 
 import { extractImageFromZip } from './unzip.js';
 import { joinTags } from './util.js';
+import { resolveModel } from './models.js';
 import { formatErrors, REQUEST_FIELDS, validateFields } from './validate.js';
 
 // 本模块刻意不 import config.js —— config 依赖 SillyTavern 的运行时，
 // 引进来就没法在 node 下单测报文构造了。设置一律由调用方传入。
-export const NAI_MODEL = 'nai-diffusion-4-5-full';
 
 const NAI_ENDPOINT = 'https://image.novelai.net/ai/generate-image';
 const MAX_SEED = 0xffffffff;
@@ -89,7 +91,10 @@ function wrapFetchError(e) {
 }
 
 /**
- * 构造 NAI 4.5 Full 的请求体。
+ * 构造请求体。
+ *
+ * V4.5 和 V5 用的是同一套形状（params_version 3 + v4_prompt / v4_negative_prompt），
+ * 所以这里没有按模型分支 —— 三个可选模型都用真实 API 验证过。
  *
  * 有三个配置键在报文里换了名字，这是最容易踩的坑：
  *   scheduler    → noise_schedule
@@ -139,7 +144,7 @@ export function buildRequestBody({ positive, negative, params, characterPrompts 
     return {
         action: 'generate',
         input: String(positive || ''),
-        model: NAI_MODEL,
+        model: String(params.model),
         parameters: {
             params_version: 3,
             width,
@@ -247,7 +252,7 @@ export async function generate({ prompt, settings, signal }) {
                 seed: body.parameters.seed,
                 width: body.parameters.width,
                 height: body.parameters.height,
-                model: NAI_MODEL,
+                model: body.model,
             },
         };
     } catch (e) {
@@ -285,7 +290,7 @@ const TEST_SIZE = 1024;
  * 极少量 Anlas。
  *
  * @param {string} apiKey
- * @param {object} [settings] 用当前设置里的 sampler / scheduler 等，
+ * @param {object} [settings] 用当前设置里的 model / sampler / scheduler，
  *                            这样测试覆盖的就是用户真正会用的那套参数
  * @returns {Promise<{ success: true, bytes: number, seed: number }>}
  */
@@ -298,6 +303,7 @@ export async function testConnection(apiKey, settings = {}) {
         positive: 'test',
         negative: '',
         params: {
+            model: resolveModel(settings.model),
             sampler: String(settings.sampler || '').trim() || 'k_euler_ancestral',
             scheduler: String(settings.scheduler || '').trim() || 'karras',
             width: TEST_SIZE,

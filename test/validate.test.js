@@ -7,6 +7,7 @@ import {
 } from '../src/validate.js';
 
 const GOOD = {
+    model: 'nai-diffusion-5-full',
     width: 1216, height: 832, steps: 28, scale: 5.5, seed: -1,
     sampler: 'k_euler_ancestral', scheduler: 'karras',
     cooldownMin: 5000, cooldownMax: 10000, timeout: 60000, ttlDays: 7, historyDepth: 5,

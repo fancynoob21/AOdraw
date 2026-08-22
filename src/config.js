@@ -20,6 +20,7 @@ export {
 export {
     DEFAULT_HISTORY_DEPTH, HISTORY_ALL, HISTORY_DEPTH_OPTIONS, hydrateStartIndex,
 } from './history.js';
+export { DEFAULT_MODEL, isKnownModel, MODEL_OPTIONS, resolveModel } from './models.js';
 
 export const DEFAULT_SETTINGS = {
     enabled: true,
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS = {
 
     // ── NovelAI ──
     apiKey: '',
+    model: 'nai-diffusion-5-full',
     positivePrefix: 'best quality, amazing quality, very aesthetic, absurdres,',
     negativePrefix: 'lowres, bad anatomy, bad hands, missing fingers, extra digits, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry',
     steps: 28,        // Opus 免费额度的上限，超过就开始计费

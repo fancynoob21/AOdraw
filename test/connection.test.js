@@ -39,7 +39,7 @@ describe('testConnection', () => {
         assert.equal(calls.length, 1);
         const body = calls[0].body;
 
-        assert.equal(body.model, 'nai-diffusion-4-5-full');
+        assert.equal(body.model, 'nai-diffusion-5-full');
         assert.equal(body.action, 'generate');
         assert.equal(typeof body.input, 'string');
 
@@ -79,12 +79,21 @@ describe('testConnection', () => {
         assert.equal(p.steps, 1);
     });
 
-    it('沿用用户设置里的 sampler / scheduler', async () => {
+    it('沿用用户设置里的 model / sampler / scheduler', async () => {
         const { calls } = stubFetch(zipResponse);
-        await testConnection('pst-fake', { sampler: 'k_dpmpp_2m', scheduler: 'native' });
+        await testConnection('pst-fake', {
+            model: 'nai-diffusion-4-5-full', sampler: 'k_dpmpp_2m', scheduler: 'native',
+        });
 
+        assert.equal(calls[0].body.model, 'nai-diffusion-4-5-full');
         assert.equal(calls[0].body.parameters.sampler, 'k_dpmpp_2m');
         assert.equal(calls[0].body.parameters.noise_schedule, 'native');
+    });
+
+    it('模型没填时回落到默认值（探针要能在面板填坏时验证 Key）', async () => {
+        const { calls } = stubFetch(zipResponse);
+        await testConnection('pst-fake', { model: '' });
+        assert.equal(calls[0].body.model, 'nai-diffusion-5-full');
     });
 
     it('带上 Bearer 认证头', async () => {

@@ -91,7 +91,9 @@ SillyTavern → 扩展 → 安装扩展 → 填入本仓库的 Git URL。
 
 ## 限制
 
-- 只支持 `nai-diffusion-4-5-full`。不支持 V3、Curated，也不支持其他后端。
+- 只支持 NovelAI。可选模型：V5 Full（默认）、V5 Curated、V4.5 Full ——
+  三个都用真实 API 验证过，且共用同一套报文格式，所以代码里没有按模型分支。
+  不支持 V3（它的报文结构完全不同）。
 - 生成是**严格串行**的，图与图之间还有 5–10s 随机冷却 —— NovelAI 单个 API Key
   不支持并发。本插件的收益来自派发时机，不是并发数。
 - 依赖 `encode_tags` 保持关闭（SillyTavern 默认就是关的）。
@@ -124,6 +126,10 @@ STREAM_FADE_IN=1 node test/browser/streaming.mjs # morphdom + 分词 span 路径
 ```
 
 两条渲染路径都要跑 —— 它们的失败方式完全不同。
+
+`test/browser/panel.mjs` 覆盖设置面板与渲染管线：控件完整性、id 不与内置
+Stable Diffusion 扩展撞车、默认值预填充、参数校验、免费额度提示、模型下拉、
+历史楼层深度、slot 注入的幂等性。全程摘掉 API Key，不产生真实请求。
 
 `test/browser/timing.mjs` 验证本插件的核心主张本身 —— 它驱动一个真实的 SillyTavern
 页面，模拟含两个 `[img:]` 的流式回复，核对第一个 NovelAI 请求发出的时刻是否早于
