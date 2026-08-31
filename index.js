@@ -34,13 +34,85 @@ function detectExtensionFolder() {
 
 const EXT_FOLDER = detectExtensionFolder();
 
-export const IMG_GUIDELINE = `## 图片
-需要展示画面时，在正文中穿插以下格式：
-[img: Subject, Appearance, Background, Atmosphere, Extra descriptors]
-- tag 必须为英文，逗号分隔，使用 Danbooru 风格，5-15 个 tag
-- 第一个 tag 固定为人物数量标签，如: 1girl, 1boy, 2girls, solo
-- 多张图片每行一个 [img: ...]
-- 尺度较大的内容加上 nsfw 相关 tag`;
+export const IMG_GUIDELINE = `当剧情出现值得定格的画面时，在该段落后生成：
+[img: ...]
+遵循以下规则。
+RULES FOR [img: ...]
+
+FORMAT: base prompt | character1 | character2
+Single character also needs |. No comma touching |.
+OK: sunset | girl,    WRONG: sunset, | girl,
+
+TOKEN LIMIT: <410. If over, cut: atmosphere > adjectives > minor actions > minor details. Never cut character ID or count tags.
+
+RULE: Tag what you see. No natural language sentences. No subjective tags (sexy, cute). Use Danbooru compound tags (princess carry, not carry + princess). Max 2 tags per concept.
+
+WEIGHT SYNTAX: numerical only. 1.5::tag :: to strengthen. 0.5::tag :: to weaken. -1::tag :: to remove/invert. No {} no []. Parentheses only in character names: changli (wuthering waves).
+
+=== BASE PROMPT (before first |) ===
+
+Note: NO quality tags needed, e.g best quality, aestheric, etc.
+Order: nsfw (if applicable), count tag, scene.
+
+Count tags: 1girl, solo / 2girls / 1boy, 1girl etc. Futa = girl.
+Count tags ONLY here, never after |.
+No-person scenes: no humans, scene tags. No | needed.
+
+Scene: location + time + light + tone + depth. Short phrases only.
+Example: outdoors, park, sunset, warm lighting, blurred background
+
+=== CHARACTER PROMPT (after |) ===
+
+Start each with: girl, / boy, / other, (no number prefix).
+OK: girl, changli (wuthering waves)
+WRONG: 1girl, changli (wuthering waves)
+
+Multiple characters: left-to-right order in image.
+
+KNOWN CHARACTER (default look): name (series), age, action, expression. DO NOT write hair color, eye color, default outfit, default accessories.
+Note: Age tag is optional for KNOWN CHARACTER, depends on if content requires character to be at certain age criteria. Use aged down / aged up and baby/petite/...etc.
+
+KNOWN CHARACTER (changed look): name (series), age, alternate costume, new appearance, new outfit, action, expression. Nude scene: must write nude. To remove default accessory: -1::hat ::
+
+Name format:
+OK: yangyang (wuthering waves)
+WRONG: yangyang, wuthering waves
+WRONG: yangyang_(wuthering_waves)
+
+ORIGINAL/NPC CHARACTER: always full description: gender, age, hairstyle, hair color, eye color, body type, outfit, accessories, action, expression. Never abbreviate.
+For underaged charcters, such as babies and children, also add tags that reflect the age, such as big eyes.
+
+Futa: if there is a "penis," tag, add 2::no testicles ::, after it.
+
+=== ACTION TAGS ===
+Whenever their is an interation, e.g Holding hand, hug, pointing at another, sex, etc. Use action tags to label source, target, or mutual.
+source#action = doer. target#action = receiver. mutual#action = both.
+Syntax: source#hug. NOT source: hug, NOT source_hug.
+
+=== EXAMPLES ===
+SFW example:
+2girls, indoors, factory, night, fog, industrial lights, pipes, light particles, cardboard box, aesthetic, best quality, english text, text | girl, purple eyes, short hair, smile, open mouth, ruffled blouse, red blouse, pleated skirt, blonde hair, green scarf, hands on own hips, blunt bangs, blue skirt, medium skirt, small breasts, bob cut, target#pointing, long sleeves, red nails, fang, cowboy shot. She is being pointed at. | girl, very long hair, purple hair, curly hair, white jeans, white pants, golden shirt, cowboy shot, green eyes, turtleneck sweater, sleeveless turtleneck, side braid, medium breasts, sleeveless, ripped jeans, wavy mouth, blush, purple nails, open mouth, source#pointing at another.
+NSFW example 1：
+nsfw, 1girl 1boy,summer theme, warm lighting, beach background, rough sex, nude, | girl, futanari, female rover (wuthering waves), hair down, wet skin, ahegao, saliva, arm behind head, medium penis, 2::no testicles::, anvil position, target#sex, barefoot, wet pussy, stomach bulge, cum on breast, cum on face, cum on stomach, cum on pussy, looking at another. | boy, male rover (wuthering waves), source#sex, pov, gigantic penis
+NSFW example 2:
+nsfw, 1girl 1boy,indoor, sex club, purple led, on velvet couch,rough sex, nude, side view | girl, futanari,female rover (wuthering waves), hair down, wet skin, ahegao, saliva, medium penis,no testicles, cowgirl position, target#sex, barefoot, wet pussy, stomach bulge, cum on breast, cum on pussy, source#hug, she is hugging another's neck. | boy, male rover (wuthering waves), tall, muscular body, nude, smirking, sitting on couch, cum on belly,source#sex, gigantic penis, target#hug, his neck is hugged by the girl
+NSFW example 3:
+nsfw, 2girls 1boy,indoor, sex hotel, luxurious bedroom, dim light, rough sex, nude, side view, group sex, spitroast, on bed | boy, male rover (wuthering waves), tall, muscular body, nude, smirking, target#fellatio, gigantic penis, source#head grab | girl, jinhsi (wuthering waves), nude, heart ahoge, barefoot, doggystyle, ahegao, source#fellatio, target#head grab, target#sex from behind, cum on face, cum on back, cum on beast, excessive pussy juice | girl, futanari, nude,female rover (wuthering waves), hair down, evil grin,on one knee, large penis, no testicles, source#sex from behind.
+
+=== SELF-CHECK (run after every output) ===
+
+1. No natural language sentences in tags.
+2. No conflicting tags (from above + from below, sitting + running).
+3. No scene tags after |. Scene goes in base prompt only.
+4. No invented accessories not in character design.
+5. looking at viewer = looking at camera ONLY. Not for characters looking at each other.
+6. No count tags after |.
+7. Known characters: no default appearance tags.
+8. No {} or [] weight syntax. Use numerical :: only.
+9. No comma next to |.
+10. Are there any interactive actions, such as hug, kiss, sex? If so, are there any source#, target#, mutual# action tags?
+11. Sequence follows left to right, top to bottom.
+12. Under 410 tokens.`;
 
 // ════════════════════════════════════════════════════════════════════════════
 // 设置 UI
