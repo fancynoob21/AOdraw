@@ -36,25 +36,6 @@ SillyTavern → 扩展 → 安装扩展 → 填入本仓库的 Git URL。
 - **测试生图** —— 用**面板上当前这套参数**真的生成一张并显示出来。
   回答的是「我这套参数出不出得来图」，而不只是「Key 有没有效」。
 
-## 用法
-
-让模型在正文里输出这种标记：
-
-```
-她把手机转过来给你看。
-[img: 1girl, smile, cafe, window light, casual clothes]
-"就是这张。"
-```
-
-把设置面板底部那段「提示词规范」缝进预设，模型就会照着写 ——
-怎么缝、以及 NAI prompt 本身怎么写，见下面的[教程](#教程让正文自带-prompt)。
-
-格式可以在设置里改（默认同时接受 `[img: ...]` 和 `[图片: ...]`）。
-自定义正则必须满足两个条件：
-
-- 含捕获组 1，即 prompt 本身
-- **必须要求闭合定界符**。这是整个设计成立的前提 —— 正则不匹配半截 token，
-  才能保证流式过程中不会拿着 `[img: 1gir` 就把请求发出去。
 
 ### 图片上的操作
 
@@ -108,45 +89,27 @@ SillyTavern → 扩展 → 安装扩展 → 填入本仓库的 Git URL。
 区别就一个：要不要把上下文连带破限再发一遍。第二种的代价是**你得改预设**，
 换来的是：
 
+- **极致流畅的酒馆阅读体验，无需正文生成结束后再傻傻的等待**
 - 省 token（每次省掉一整份上下文 + 破限 + 可能触发的世界书）
 - 不会在 NSFW 场景卡在「LLM 解析失败」上 —— 根本没有第二次解析
-- 快。正文里 `[img:]` 一闭合就开始画，不用等正文写完（这也是本插件存在的理由）
 - 聊天时可以用括号大法临时指挥画面
 
 出图质量上两者没有明显差别。所以不是谁一定更好 —— 如果你不心疼 token、
 也不介意正文读完半天图才慢慢出来，第一种确实更省事。
 
-### 第一步：填面板
+### 第一步：填面板（除了API key需要填用默认的就好）
 
 装好之后在扩展设置里：
 
 - **API Key** —— 填完点旁边的「测试」确认能用。
-- **模型** —— AOdraw 默认 V5 Full。原教程当时推荐 V4.5 Full，
-  两者报文格式一致、随时可切，画风不对再换。
-- **正向前缀** —— 放**画师串**，也就是画风。第一次用不知道填什么可以先抄一组：
-
-  ```
-  1.2::misaka12003-gou ::, 0.8::dino(dinoartforame)::, year 2025, realistic, 4k,
-  1.3::photorealistic::, 1.3::photo(medium)::,
-  15::best quality, absurdres, very aesthetic, detailed, masterpiece::, no text
-  ```
-
-- **负向前缀** —— 你不想要的东西：
-
-  ```
-  blurry, lowres, error, film grain, scan artifacts, worst quality, bad quality,
-  jpeg artifacts, very displeasing, chromatic aberration, logo, dated, signature,
-  multiple views, watermark, username, bad hands, extra digits, fewer digits
-  ```
-
+- **模型** —— AOdraw 默认 V5 Full。推荐v5或者v4f。不推荐v4c。
+- **正向前缀** —— 放**画师串**，也就是画风。
+- **负向前缀** —— 你不想要的：
 - **采样器** Euler Ancestral / Euler / DPM++ 2M / DPM++ SDE 都行，推荐 Euler 或 DPM++ 2M；
   **调度器** Karras；**steps** 26–28；**CFG** 5–6；**seed** -1；**多样性增强**建议开。
 
 填完用「测试生图」跑一张 —— 它用的是面板上这套参数，所以能回答的是
 「我这套参数出不出得来图」，而不只是「Key 有没有效」。
-
-如果你同时装着别的生图插件，**先把它的自动生图关掉**。两者不冲突，
-但同时开着容易分不清图是谁出的、prompt 是谁写的。
 
 ### 第二步：把提示词规范缝进预设
 
