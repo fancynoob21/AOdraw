@@ -46,7 +46,8 @@ SillyTavern → 扩展 → 安装扩展 → 填入本仓库的 Git URL。
 "就是这张。"
 ```
 
-把设置面板底部那段「提示词规范」复制进角色卡或预设，模型就会照着写。
+把设置面板底部那段「提示词规范」缝进预设，模型就会照着写 ——
+怎么缝、以及 NAI prompt 本身怎么写，见下面的[教程](#教程让正文自带-prompt)。
 
 格式可以在设置里改（默认同时接受 `[img: ...]` 和 `[图片: ...]`）。
 自定义正则必须满足两个条件：
@@ -88,6 +89,237 @@ SillyTavern → 扩展 → 安装扩展 → 填入本仓库的 Git URL。
 **最新楼层永远渲染** —— 深度设的是*额外*往回的范围，所以哪怕选「只渲染最新楼层」，
 刚生成出来的那一层照样出图。超出范围的旧楼层会原样显示 `[img: ...]` 文本；
 如果你去编辑或 swipe 某个旧楼层，那一层会单独注水，不受深度限制。
+
+## 教程：让正文自带 prompt
+
+> 本节改写自青豆的《四次元壁生图教程以及 NAI 基础知识讲解》
+> （原文含截图，不在本仓库内）。原文是给小白x + 四次元壁写的，
+> AOdraw 参考了那套思路，但把「填参数、发 NAI、渲染」都收进了自己的面板，
+> 所以下面的设置步骤按 AOdraw 重写；**改预设和 NAI 基础知识那部分是通用的**。
+
+### 两种生图方式
+
+用 NAI 生图一共三步：拿到一个生图 prompt → 发给 NAI → 返图并渲染。
+后两步是插件的事，真正有分歧的只有第一步：
+
+1. **让另一个 LLM 解析上下文再写 prompt。** 大多数生图插件的做法 ——
+   把刚生成的几千字正文，连同插件自带的破限、写 prompt 的指导、世界书条目，
+   再发一次给 LLM，让它吐一个 prompt。
+2. **让正文自带 prompt。** 也就是 AOdraw 的做法 —— 正文写出来的时候
+   `[img: ...]` 已经在里面了，插件只负责把它抠出来发走。
+
+区别就一个：要不要把上下文连带破限再发一遍。第二种的代价是**你得改预设**，
+换来的是：
+
+- 省 token（每次省掉一整份上下文 + 破限 + 可能触发的世界书）
+- 不会在 NSFW 场景卡在「LLM 解析失败」上 —— 根本没有第二次解析
+- 快。正文里 `[img:]` 一闭合就开始画，不用等正文写完（这也是本插件存在的理由）
+- 聊天时可以用括号大法临时指挥画面
+
+出图质量上两者没有明显差别。所以不是谁一定更好 —— 如果你不心疼 token、
+也不介意正文读完半天图才慢慢出来，第一种确实更省事。
+
+### 第一步：填面板
+
+装好之后在扩展设置里：
+
+- **API Key** —— 填完点旁边的「测试」确认能用。
+- **模型** —— AOdraw 默认 V5 Full。原教程当时推荐 V4.5 Full，
+  两者报文格式一致、随时可切，画风不对再换。
+- **正向前缀** —— 放**画师串**，也就是画风。第一次用不知道填什么可以先抄一组：
+
+  ```
+  1.2::misaka12003-gou ::, 0.8::dino(dinoartforame)::, year 2025, realistic, 4k,
+  1.3::photorealistic::, 1.3::photo(medium)::,
+  15::best quality, absurdres, very aesthetic, detailed, masterpiece::, no text
+  ```
+
+- **负向前缀** —— 你不想要的东西：
+
+  ```
+  blurry, lowres, error, film grain, scan artifacts, worst quality, bad quality,
+  jpeg artifacts, very displeasing, chromatic aberration, logo, dated, signature,
+  multiple views, watermark, username, bad hands, extra digits, fewer digits
+  ```
+
+- **采样器** Euler Ancestral / Euler / DPM++ 2M / DPM++ SDE 都行，推荐 Euler 或 DPM++ 2M；
+  **调度器** Karras；**steps** 26–28；**CFG** 5–6；**seed** -1；**多样性增强**建议开。
+
+填完用「测试生图」跑一张 —— 它用的是面板上这套参数，所以能回答的是
+「我这套参数出不出得来图」，而不只是「Key 有没有效」。
+
+如果你同时装着别的生图插件，**先把它的自动生图关掉**。两者不冲突，
+但同时开着容易分不清图是谁出的、prompt 是谁写的。
+
+### 第二步：把提示词规范缝进预设
+
+一句话：**在预设里新建一个条目，或者挑一个你不需要的功能条目，
+把设置面板底部那段「提示词规范」整段贴进去，拖到正文相关条目附近。** 完事。
+
+预设大致两种写法，认出你手上是哪种：
+
+- **平铺直叙式** —— 条目顺序就是发给 LLM 的顺序，看一眼就懂，直接插条目即可。
+- **变量式** —— 大量用 `{{setvar::x::...}}` / `{{getvar::x}}`。
+  `setvar` 只是「把这段内容存成变量 x」，**真正发给 LLM 的地方是 `getvar` 所在的条目**。
+
+  所以改变量式预设的第一步永远是：搜 `getvar::`，找到那一到两个真正拼装
+  提示词的条目，照着变量名把这个条目的结构「翻译」一遍，看懂它在干什么。
+  然后要么仿照 `setvar` 定义自己的变量再 `getvar` 插到合适位置，
+  要么直接替换掉某个你不需要的、位置正好的变量。
+
+**怎么算成功？** 随便进一个聊天发一句，满足两条即可：
+
+1. 正文里出现了 `[img: ...]`
+2. 图片正常渲染出来
+
+### 第三步（推荐）：缝 COT
+
+COT（chain of thought，思维链）是预设里要求 LLM 输出正文前先过一遍的一串问题。
+它存在的两个理由，正好对应生图最常见的两个毛病：**掉格式**（不出图、格式写崩）
+和**质量不好**。所以找到预设里的 COT，把这段加进去：
+
+```
+画面分析: 本次剧情值得定格生成图片的画面有哪些？角色是默认服装还是 alternate costume？
+如果是多人图（2 人及以上），按照 top to bottom, left to right 构图顺序，
+角色标签的顺序应当是？画面中是否有 interactive 的动作如牵手、拥抱、接吻、性爱等等？
+如果有，谁是 source，谁是 target，或者是多人 mutual？
+```
+
+非同人卡把「默认服装还是 alternate costume」换成「角色的服装是？」。
+
+按自己的毛病增补，比如：
+
+| 想要 | 加一句 |
+|---|---|
+| 每轮至少一张图 | 要求本次剧情至少一张图，这张图是？ |
+| 按字数动态出图 | 要求每 500 字左右内容生成一张图，本轮输出的图片数量是？在后续剧情规划中，每 500 字左右的剧情中，值得定格的画面都有哪些？ |
+| 提高 prompt 质量 | 打草稿：生成提示词的草稿，然后检查草稿中是否存在问题？应当怎样修改？最终的提示词应当是怎样？ |
+| NSFW 多配图 | 本次剧情是否处于 NSFW 剧情？如果是，需要大量配图，那么这些画面是？ |
+| 图插在段落里而不是堆在末尾 | 已经要求 `[img:..]` 需要在正文的对应段落后插入，而非放置在尾部，那么图片应该在正文的哪里插入？ |
+
+### NAI 提示词基础
+
+一条完整的 prompt 由五部分组成：**画师串、风格词、质量词、场景词、人物词**。
+写的顺序也大致如此。前三部分是固定的（在 AOdraw 里就是正向前缀，填一次不用再动），
+每次真正要动的只有场景词和人物词。
+
+**画师串 ≠ 正向固定词。** 这是抄串最常见的坑：论坛上贴的所谓「画师串」里
+经常混着只为某一张图服务的场景词和人物词。比如这一串里的
+`sfw`（想 NSFW 就冲突了）、`living room, afternoon`（钉死了地点和时间）、
+`from front, mid shot`（钉死了视角）、`duo, 2people`（钉死了人数）、
+`intimate atmosphere`（钉死了气氛）—— 这些都不属于画师串。
+**画师串必须是通用的**：权重 + 画师名，加上风格词、质量词，就这些。
+
+另外，很多画师的男性数据很少。如果你发现女角色都很美型、男角色一塌糊涂，
+那大概是画师串的问题（NAI 本身画男性也确实弱于女性），换/调画师串能显著缓解。
+
+**场景词** 定义时间、地点、氛围、视角：`afternoon`、`coffee shop`、
+`back light`、`dappled sunlight`、`chinese new year`、`side view`、`wide shot`。
+镜头词放场景词还是人物词取决于类型 —— `wide shot` 属于整张图，放场景词；
+`pov` 属于某个人，放那个人的人物词里。
+
+**人物词** 的核心原则一句话：**描述你看见的，而不是你感受到的。**
+`cute` / `sexy` / `handsome` 不是你看见的东西；`witch` 也不是 ——
+你看见的是巫师帽、长袍、扫帚、水晶球。同理年龄：永远不要写 `23 years old`
+或 `teenage`，要写 `petite` / `mature female` / `big eyes` 这种真的能看见的特征。
+
+写的顺序是从整体到局部、从上到下、先身体后衣服：
+
+1. **性别** ——`girl,` / `boy,`，非人类（宝可梦之类）省略。
+   性别模糊的角色必须紧跟一个强调，否则容易多出或少掉东西：
+   扶她是 `girl, futanari,`，男娘是 `boy, otokonoko,`。
+2. **名字（作品）** —— 同人角色写 `male rover (wuthering waves)` 这种格式。
+   **外观没变就不要写外观** —— 发色瞳色默认服装都不用写，NAI 自己知道。
+   变了才用 `alternate costume` / `alternate eye color` / `hair down` 之类标出来。
+3. **体型** ——`petite` / `tall female` / `curvy` / `toned`。
+4. **发型、瞳色、表情** —— 表情也能很细：`nervous smile`、`seductive smile`，
+   甚至 `:D`、`D:`、`x3` 都是有效的 Danbooru tag。
+5. **衣着与状态** ——`qixiong ruqun`、`off shoulder`、`cleavage`、`barefoot`。
+6. **身体细节、装饰** ——`small breasts`、`heart tattoo`。
+7. **动作** —— 独立动作跟在对应部位后面；**交互动作必须标主被动**。
+
+`source#动作` 是施加方，`target#动作` 是承受方，`mutual#动作` 是双方共同。
+比如 `| girl, ..., source#pointing | boy, ..., target#pointing`。
+拥抱、接吻这类动作尤其重要 —— 是霸总强吻白月光，还是白月光主动吻上去，
+是两张完全不同的图。
+
+多人图用 `|` 分隔每个人物，顺序是画面里的从左到右、从上到下 ——
+这也是为什么场景词要写在人物词前面（单人图放后面也行）。
+
+**NSFW** 就四件事：`nsfw,` 放在最前面；场景词里加 `happy sex` / `rough sex`
+定基调；体位和行为从 Danbooru 的 Sexual Positions / Sex Acts tag group 里查，
+接在对应人物外貌描述之后；需要强调部位就加 focus tag（`foot focus` 等）。
+注意 `nude` 的位置：两个人都裸就放场景词（`|` 之前），
+只有一方裸就放到那个人的人物词里。
+
+### 为什么要查 Danbooru
+
+Danbooru 是插画站，它那套社区维护的高度规范化标签系统正是 NAI 的训练数据来源。
+所以想精准描述画面，prompt 就该按 Danbooru tag 的规范写 ——
+这也是为什么某些模型（比如 DeepSeek）写出来的 prompt 经常不尽人意：
+它们知识库里 Danbooru 风格的语料严重缺失。
+
+不知道某个东西怎么描述，就去查 [Tag Groups Wiki](https://danbooru.donmai.us/wiki_pages/tag_groups)。
+问 AI 也行，但**AI 会口胡** —— 它给的 tag 一定要去 Danbooru 搜一下确认真的存在。
+
+### 给世界书补角色外貌
+
+生成的人物和想象中不一样，很多时候不是 prompt 的问题，
+而是**世界书里本来就没写清楚这个角色长什么样**。LLM 自己也不知道，只能脑补。
+
+补的方式有两种。中文直接描述：
+
+```
+身材娇小纤细，皮肤白皙。棕色双马尾扎在耳侧，发梢微卷，刘海齐眉。
+圆润的脸庞上嵌着一双明亮的琥珀色大眼睛，睫毛浓密。
+头戴白色遮阳帽，上身黑色无袖背心外搭敞开的红色短款连帽夹克，袖口挽到手肘。
+```
+
+或者直接写成 Danbooru tag：
+
+```
+petite, slim, pale skin, small breasts,
+brown hair, low twintails, wavy hair, blunt bangs,
+amber eyes, big eyes, long eyelashes,
+white headwear, sun hat, hat badge,
+black tank top, red jacket, open jacket, hooded jacket, sleeves rolled up,
+grey shorts, bike shorts, shoulder bag, yellow bag,
+black kneehighs, sneakers, red footwear
+```
+
+英文不好的话第一种更省心（出问题不用二次翻译排查）。但如果你不介意，
+**第二种全面更优**：写在设定里的内容本身就已经是生图会用的 prompt 了，
+LLM 只需要复制粘贴。一旦测试过表现良好，以后就永远不会出问题。
+
+懒得手写就找个 AI：「帮我把这段角色设定翻译成 danbooru tag 风格，
+我要在 novel ai 生图」，或者直接丢一张人设图让它描述。
+写完放世界书的角色条目里；user 自己的形象放「笑脸」（persona）里。
+
+### 按需改提示词规范
+
+规范分三块：总体规则、base prompt、character prompt。想加需求就往对应的块里塞。
+
+- **画师串去哪了？** 在 AOdraw 的正向前缀里，不在规范里。
+- **伪娘老是画成女的** —— 在 base prompt 的 `Count tags: ... Futa = girl.`
+  后面加 `Otoko no ko = boy.`；再在 character prompt 的
+  `Start each with: girl, / boy, / other,` 后面加
+  `Add otoko no ko, / futanari, tag after if appropriate.`（取决于模型智力，值得强调两遍）
+- **不想看男性的脸** —— 往镜头那段加：
+
+  ```
+  No Male Face Rule: if the character is male, add pov, or head out of frame,
+  tag to remove male's face in the image. Smartly choose between pov and
+  head out of frame based on the composition of the image.
+  ```
+
+- **年龄那段被审查掉了** —— 年龄描述是最容易触发截断的部分，
+  被哈气的话可以整段删掉。代价是 LLM 会退回去写 `23-year-old` / `teenage`
+  这种 NAI 根本 get 不到的词，人物年龄感会飘。
+
+原文还给了同人卡 / 非同人卡两个版本的规范：非同人卡版本去掉了
+「同人角色不写默认外观」那套规则，改成**每个角色都要完整描述**
+（性别、年龄、发型、发色、瞳色、体型、服装、配饰、动作、表情），
+也不写 `名字（作品）` tag。玩原创卡的话用那个版本更合适。
 
 ## 限制
 
