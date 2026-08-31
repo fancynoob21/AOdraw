@@ -29,7 +29,7 @@ export const DEFAULT_SETTINGS = {
     // ── NovelAI ──
     apiKey: '',
     model: 'nai-diffusion-5-full',
-    positivePrefix: 'best quality, amazing quality, very aesthetic, absurdres,',
+    positivePrefix: '1.2::misaka12003-gou ::, 0.8::dino(dinoartforame), year 2025, realistic, 4k, 1.3::photorealistic::, 1.3::photo(medium)::, 15::best quality, absurdres, very aesthetic, detailed, masterpiece::,',
     negativePrefix: 'lowres, bad anatomy, bad hands, missing fingers, extra digits, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry',
     steps: 28,        // Opus 免费额度的上限，超过就开始计费
     scale: 5.5,       // NovelAI 界面里叫 Prompt Guidance
