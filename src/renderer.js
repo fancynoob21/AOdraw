@@ -14,6 +14,7 @@ import { getPattern, getSettings, LOG_PREFIX } from './config.js';
 import { hydrateStartIndex } from './history.js';
 import * as cache from './cache.js';
 import * as pipeline from './pipeline.js';
+import { generationHash } from './profiles.js';
 import { hash64, normalizePrompt } from './util.js';
 
 const SLOT_CLASS = 'aod-slot';
@@ -38,7 +39,7 @@ export function resolve(rawPrompt) {
     const oh = hash64(rawPrompt);
     const override = cache.getOverrideSync(oh);
     const prompt = override || rawPrompt;
-    return { oh, h: hash64(prompt), prompt, overridden: !!override };
+    return { oh, h: generationHash(prompt, getSettings()), prompt, overridden: !!override };
 }
 
 // ════════════════════════════════════════════════════════════════════════════

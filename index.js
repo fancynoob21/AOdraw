@@ -8,6 +8,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { renderExtensionTemplateAsync } from '../../../extensions.js';
+import { callGenericPopup, POPUP_TYPE } from '../../../popup.js';
 import * as cache from './src/cache.js';
 import {
     DEFAULT_PATTERN, FREE_STEPS_LIMIT, getSettings, HISTORY_DEPTH_OPTIONS,
@@ -15,6 +16,11 @@ import {
     SIZE_OPTIONS, sizeValueOf,
 } from './src/config.js';
 import { generate, testConnection } from './src/nai-client.js';
+import {
+    applyProfile, createProfileFromCurrent, deleteProfile, duplicateProfile,
+    getActiveProfile, isActiveProfileDirty, PROFILE_FIELDS, renameProfile,
+    saveCurrentToActiveProfile,
+} from './src/profiles.js';
 import { formatErrors, validateFields } from './src/validate.js';
 import * as pipeline from './src/pipeline.js';
 import { hydrateAll } from './src/renderer.js';
@@ -141,6 +147,8 @@ const FIELDS = [
     ['aod_pattern', 'pattern', 'str'],
 ];
 
+const PROFILE_FIELD_SET = new Set(PROFILE_FIELDS);
+
 function readControl(input, type) {
     if (type === 'bool') return input.checked;
     if (type === 'int' || type === 'num') {
@@ -165,6 +173,9 @@ function bindSettingsUI() {
     // 下拉的 option 必须先建好，否则后面 writeControl 设 value 会落空
     populateHistorySelect();
     populateModelSelect();
+    populateSizeSelect();
+    bindProfileControls();
+    syncSettingsControls();
 
     for (const [id, key, type] of FIELDS) {
         const input = document.getElementById(id);
@@ -172,8 +183,6 @@ function bindSettingsUI() {
             console.warn(LOG_PREFIX, 'missing settings control', id);
             continue;
         }
-
-        writeControl(input, type, settings[key]);
 
         input.addEventListener('change', () => {
             const value = readControl(input, type);
@@ -191,8 +200,10 @@ function bindSettingsUI() {
 
             saveSettings();
             refreshValidation();
+            refreshProfileUI();
 
             if (key === 'pattern' || key === 'enabled' || key === 'historyDepth') hydrateAll();
+            if (PROFILE_FIELD_SET.has(key)) hydrateAll();
             if (key === 'steps') updateSizeHint(); // 免费额度还取决于 steps
         });
     }
@@ -208,6 +219,22 @@ function bindSettingsUI() {
     document.getElementById('aod_clear_cache')?.addEventListener('click', onClearCache);
 
     void refreshCacheStats();
+}
+
+function syncSettingsControls() {
+    const settings = getSettings();
+
+    for (const [id, key, type] of FIELDS) {
+        const input = document.getElementById(id);
+        if (input) writeControl(input, type, settings[key]);
+    }
+
+    const size = /** @type {HTMLSelectElement} */ (document.getElementById('aod_size'));
+    if (size) size.value = sizeValueOf(settings);
+
+    updateSizeHint();
+    refreshValidation();
+    refreshProfileUI();
 }
 
 /** 模型下拉，同样要先填好选项 */
@@ -232,6 +259,110 @@ function populateHistorySelect() {
         el.textContent = option.label;
         select.appendChild(el);
     }
+}
+
+function populateSizeSelect() {
+    const select = document.getElementById('aod_size');
+    if (!select || select.options.length) return;
+    for (const option of SIZE_OPTIONS) {
+        const el = document.createElement('option');
+        el.value = option.value;
+        el.textContent = option.free ? `${option.label} · 免费` : option.label;
+        select.appendChild(el);
+    }
+}
+
+function bindProfileControls() {
+    const select = /** @type {HTMLSelectElement} */ (document.getElementById('aod_profile'));
+    if (!select) return;
+
+    select.addEventListener('change', () => {
+        const settings = getSettings();
+        if (!applyProfile(settings, select.value)) return;
+        saveSettings();
+        syncSettingsControls();
+        hydrateAll();
+    });
+
+    document.getElementById('aod_profile_save')?.addEventListener('click', () => {
+        const settings = getSettings();
+        saveCurrentToActiveProfile(settings);
+        saveSettings();
+        refreshProfileUI();
+    });
+
+    document.getElementById('aod_profile_new')?.addEventListener('click', async () => {
+        const name = await callProfileNamePopup('新建 Profile', '新 Profile');
+        if (!name) return;
+        const settings = getSettings();
+        createProfileFromCurrent(settings, name);
+        saveSettings();
+        refreshProfileUI();
+    });
+
+    document.getElementById('aod_profile_duplicate')?.addEventListener('click', () => {
+        const settings = getSettings();
+        duplicateProfile(settings, settings.activeProfileId);
+        saveSettings();
+        syncSettingsControls();
+    });
+
+    document.getElementById('aod_profile_rename')?.addEventListener('click', async () => {
+        const settings = getSettings();
+        const active = getActiveProfile(settings);
+        const name = await callProfileNamePopup('重命名 Profile', active.name);
+        if (!name) return;
+        renameProfile(settings, active.id, name);
+        saveSettings();
+        refreshProfileUI();
+    });
+
+    document.getElementById('aod_profile_delete')?.addEventListener('click', () => {
+        const settings = getSettings();
+        if (!deleteProfile(settings, settings.activeProfileId)) return;
+        saveSettings();
+        syncSettingsControls();
+        hydrateAll();
+    });
+}
+
+async function callProfileNamePopup(title, value) {
+    const input = await callGenericPopup(title, POPUP_TYPE.INPUT, value, {
+        okButton: '保存',
+        cancelButton: '取消',
+    });
+    if (input === null || input === false) return '';
+    return String(input).trim();
+}
+
+function refreshProfileUI() {
+    const settings = getSettings();
+    const select = /** @type {HTMLSelectElement} */ (document.getElementById('aod_profile'));
+    if (!select) return;
+
+    const active = getActiveProfile(settings);
+    select.replaceChildren();
+    for (const profile of settings.profiles) {
+        const option = document.createElement('option');
+        option.value = profile.id;
+        option.textContent = profile.name;
+        select.appendChild(option);
+    }
+    select.value = active.id;
+
+    const dirty = isActiveProfileDirty(settings);
+    const status = document.getElementById('aod_profile_status');
+    if (status) {
+        status.textContent = dirty
+            ? '当前面板参数尚未保存到这个 Profile。'
+            : `当前使用：${active.name}`;
+    }
+
+    const save = document.getElementById('aod_profile_save');
+    if (save) save.classList.toggle('disabled', !dirty);
+
+    const del = document.getElementById('aod_profile_delete');
+    if (del) del.classList.toggle('disabled', settings.profiles.length <= 1);
 }
 
 /** 设置键 → 面板控件 id，用于把校验错误标回对应的输入框 */
@@ -351,13 +482,6 @@ function bindSizeSelect() {
 
     const settings = getSettings();
 
-    for (const option of SIZE_OPTIONS) {
-        const el = document.createElement('option');
-        el.value = option.value;
-        el.textContent = option.free ? `${option.label} · 免费` : option.label;
-        select.appendChild(el);
-    }
-
     // 反查当前 width/height 属于哪个选项；旧配置或手改过的值会落回默认
     select.value = sizeValueOf(settings);
     const resolved = SIZE_OPTIONS.find(o => o.value === select.value);
@@ -374,6 +498,9 @@ function bindSizeSelect() {
         settings.height = picked.height;
         saveSettings();
         updateSizeHint();
+        refreshValidation();
+        refreshProfileUI();
+        hydrateAll();
     });
 
     updateSizeHint();

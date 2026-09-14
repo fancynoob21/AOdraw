@@ -21,6 +21,19 @@
             <hr>
 
             <h4>NovelAI</h4>
+            <label for="aod_profile">Profile</label>
+            <div class="flex-container aod-profile-row">
+                <select id="aod_profile" class="text_pole flex1"></select>
+                <div id="aod_profile_save" class="menu_button" title="把当前面板参数保存到这个 Profile">保存</div>
+            </div>
+            <div class="flex-container aod-profile-actions">
+                <div id="aod_profile_new" class="menu_button">新建</div>
+                <div id="aod_profile_duplicate" class="menu_button">复制</div>
+                <div id="aod_profile_rename" class="menu_button">重命名</div>
+                <div id="aod_profile_delete" class="menu_button">删除</div>
+            </div>
+            <small id="aod_profile_status" class="notes"></small>
+
             <label for="aod_api_key">API Key</label>
             <div class="flex-container">
                 <input id="aod_api_key" type="password" class="text_pole flex1" placeholder="pst-...">

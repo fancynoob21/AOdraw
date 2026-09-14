@@ -215,6 +215,20 @@
     align-items: flex-end;
 }
 
+.aod-profile-row {
+    margin-top: 2px;
+}
+
+.aod-profile-actions {
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.aod-profile-actions .menu_button,
+.aod-profile-row .menu_button {
+    white-space: nowrap;
+}
+
 /* ── 参数校验 ──────────────────────────────────────────────────────────── */
 
 .aod-validation {

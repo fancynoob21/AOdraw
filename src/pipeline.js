@@ -13,7 +13,8 @@
 import * as cache from './cache.js';
 import { getSettings, LOG_PREFIX } from './config.js';
 import { ErrorType, generate, NaiError } from './nai-client.js';
-import { hash64, randomDelay, sleep } from './util.js';
+import { generationHash } from './profiles.js';
+import { randomDelay, sleep } from './util.js';
 
 /**
  * @typedef {'idle'|'queued'|'generating'|'waiting'|'done'|'error'} SlotStatus
@@ -38,7 +39,7 @@ const listeners = new Map();
 /** hash → 进行中的 Promise，用于同 prompt 去重 @type {Map<string, Promise<void>>} */
 const inflight = new Map();
 
-/** 待处理队列 @type {Array<{ h: string, prompt: string }>} */
+/** 待处理队列 @type {Array<{ h: string, prompt: string, settings: object }>} */
 const queue = [];
 let draining = false;
 
@@ -48,7 +49,7 @@ let draining = false;
 
 /** @param {string} prompt @returns {string} */
 export function hashOf(prompt) {
-    return hash64(prompt);
+    return generationHash(prompt, getSettings());
 }
 
 /**
@@ -148,7 +149,9 @@ export function hydrateFromCache(h, prompt = '') {
  * @returns {Promise<void>}
  */
 export function request(prompt, { force = false } = {}) {
-    const h = hash64(prompt);
+    // 入队时冻结一份参数。用户切 profile 不应该改掉已经排队中的图。
+    const settings = structuredClone(getSettings());
+    const h = generationHash(prompt, settings);
 
     const existing = inflight.get(h);
     if (existing) return existing; // 同 prompt 已在飞，复用
@@ -160,7 +163,7 @@ export function request(prompt, { force = false } = {}) {
         }
 
         setState(h, { status: 'queued', prompt, position: queue.length + 1, error: undefined });
-        queue.push({ h, prompt });
+        queue.push({ h, prompt, settings });
         renumberQueue();
         void drain();
 
@@ -199,13 +202,12 @@ async function drain() {
 
     try {
         while (queue.length > 0) {
-            const { h, prompt } = queue.shift();
+            const { h, prompt, settings } = queue.shift();
             renumberQueue();
 
             setState(h, { status: 'generating', position: queue.length });
 
             try {
-                const settings = getSettings();
                 const { blob, meta } = await generate({ prompt, settings });
                 await cache.put(h, prompt, blob, meta);
                 revokeUrl(h);

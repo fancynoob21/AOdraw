@@ -4,6 +4,7 @@
 
 import { extension_settings } from '../../../../extensions.js';
 import { saveSettingsDebounced } from '../../../../../script.js';
+import { ensureProfiles } from './profiles.js';
 import { compilePattern } from './util.js';
 
 export const EXT_ID = 'AOdraw';
@@ -51,6 +52,10 @@ export const DEFAULT_SETTINGS = {
     // ── 渲染 ──
     livePreview: true,
     historyDepth: 5, // 除最新楼层外，还渲染多少个过去楼层；-1 = 全部
+
+    // ── 参数 Profile ──
+    profiles: [],
+    activeProfileId: '',
 };
 
 /** 改名前的设置键。留着只为把 API Key 之类搬过来，之后可以删。 */
@@ -82,6 +87,7 @@ export function getSettings() {
             extension_settings[EXT_ID][key] = value;
         }
     }
+    ensureProfiles(extension_settings[EXT_ID]);
     return extension_settings[EXT_ID];
 }
 
