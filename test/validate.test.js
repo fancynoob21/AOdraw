@@ -64,6 +64,24 @@ describe('validateField', () => {
     it('未知字段不报错', () => {
         assert.equal(validateField('不存在的字段', null), null);
     });
+
+    it('API 地址可以留空（留空 = NovelAI 官方，是一个有明确含义的选项）', () => {
+        for (const empty of ['', '   ', null, undefined]) {
+            assert.equal(validateField('apiEndpoint', empty), null);
+        }
+    });
+
+    it('API 地址填了就必须是 http(s) 完整地址', () => {
+        assert.equal(validateField('apiEndpoint', 'https://nai.example.com'), null);
+        assert.equal(validateField('apiEndpoint', 'http://127.0.0.1:8080/ai/generate-image'), null);
+
+        for (const bad of ['nai.example.com', 'ftp://nai.example.com', 'not a url']) {
+            const e = validateField('apiEndpoint', bad);
+            assert.ok(e, `${bad} 应该被判为错误`);
+            assert.equal(e.label, 'API 地址');
+            assert.match(e.message, /http/);
+        }
+    });
 });
 
 describe('validateFields', () => {
@@ -88,6 +106,13 @@ describe('validateFields', () => {
         const errors = validateFields({ ...GOOD, cooldownMin: '', cooldownMax: 5000 });
         assert.equal(errors.length, 1);
         assert.equal(errors[0].key, 'cooldownMin');
+    });
+
+    it('API 地址填错会和其他字段一起被报出来', () => {
+        const errors = validateFields({ ...GOOD, apiEndpoint: 'nai.example.com' });
+        assert.deepEqual(errors.map(e => e.key), ['apiEndpoint']);
+        // 它不进报文，所以只看报文字段时是干净的
+        assert.deepEqual(validateFields({ ...GOOD, apiEndpoint: 'nai.example.com' }, REQUEST_FIELDS), []);
     });
 
     it('可以只校验一部分字段', () => {

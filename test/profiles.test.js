@@ -112,4 +112,23 @@ describe('profiles', () => {
         assert.equal(generationHash('same', randomA), generationHash('same', randomB));
         assert.notEqual(generationHash('same', fixedA), generationHash('same', fixedB));
     });
+
+    it('API 地址是运行设置：不进 hash，也不跟着 profile 走', () => {
+        // 换一家服务商出的还是同一张图的「同一组参数」，缓存不该因此全部作废；
+        // 切 profile 切的是「怎么画」，也不该顺手把请求改发到别处。
+        const official = { ...clone(), apiEndpoint: '' };
+        const third = { ...clone(), apiEndpoint: 'https://nai.example.com' };
+        assert.equal(generationHash('1girl', official), generationHash('1girl', third));
+
+        const settings = { ...clone(), apiEndpoint: 'https://nai.example.com' };
+        const first = getActiveProfile(settings);
+        assert.equal(first.params.apiEndpoint, undefined);
+
+        settings.apiEndpoint = 'https://other.example.com';
+        assert.equal(isActiveProfileDirty(settings), false);
+
+        createProfileFromCurrent(settings, '另一套');
+        assert.equal(applyProfile(settings, first.id), true);
+        assert.equal(settings.apiEndpoint, 'https://other.example.com');
+    });
 });

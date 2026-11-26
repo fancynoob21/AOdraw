@@ -8,6 +8,7 @@
 // 那才需要一整条独立代码路径，复杂度翻倍而收益为零。
 // ════════════════════════════════════════════════════════════════════════════
 
+import { isCustomEndpoint, resolveEndpoint } from './endpoint.js';
 import { extractImageFromZip } from './unzip.js';
 import { joinTags } from './util.js';
 import { resolveModel } from './models.js';
@@ -15,8 +16,10 @@ import { formatErrors, REQUEST_FIELDS, validateFields } from './validate.js';
 
 // 本模块刻意不 import config.js —— config 依赖 SillyTavern 的运行时，
 // 引进来就没法在 node 下单测报文构造了。设置一律由调用方传入。
+//
+// 请求地址也是设置的一部分（apiEndpoint），见 endpoint.js：留空打官方，
+// 填了就打第三方。
 
-const NAI_ENDPOINT = 'https://image.novelai.net/ai/generate-image';
 const MAX_SEED = 0xffffffff;
 const TEST_TIMEOUT = 15000;
 
@@ -63,31 +66,103 @@ function extractApiMessage(text) {
  *
  * 5xx 一定要把服务端原话带出来。NovelAI 对**报文形状不合法**的请求也回 500，
  * 光显示「服务不可用」会让人以为是对面挂了，实际上是我们自己发错了。
+ *
+ * @param {number} status
+ * @param {string} text
+ * @param {{ url: string, custom: boolean }} endpoint
+ *        请求发给了谁。发给第三方的话措辞要跟着换 ——
+ *        第三方的错不能说成「NovelAI 返回」，额度也不叫 Anlas。
  */
-function parseApiError(status, text) {
+function parseApiError(status, text, endpoint) {
+    const { url, custom } = endpoint;
     const detail = extractApiMessage(text);
     const suffix = detail ? `: ${detail}` : '';
 
+    // 第三方地址回 404 / 405，几乎总是地址本身填错了（路径不对）。
+    // 归到 CONFIG：队列会整条清掉，免得后面每张图都去撞一次同一个错地址。
+    // 把实际请求的地址带上 —— 只填域名时路径是我们补的，得让人看见补成了什么。
+    if (custom && (status === 404 || status === 405)) {
+        return new NaiError(
+            `请求失败 ${status}，请检查 API 地址是否填对（实际请求：${url}）${suffix}`,
+            ErrorType.CONFIG,
+        );
+    }
+
     switch (status) {
         case 401: return new NaiError('API Key 无效', ErrorType.AUTH);
-        case 402: return new NaiError('Anlas 不足', ErrorType.QUOTA);
+        case 402: return new NaiError(custom ? '额度不足 (402)' : 'Anlas 不足', ErrorType.QUOTA);
         case 429: return new NaiError('并发繁忙，请稍后重试', ErrorType.BUSY);
         case 400: return new NaiError(`请求被拒绝 (400)${suffix}`, ErrorType.UNKNOWN);
         case 500:
         case 502:
         case 503:
-        case 504: return new NaiError(`NovelAI 返回 ${status}${suffix}`, ErrorType.NETWORK);
+        case 504: return new NaiError(
+            `${custom ? '第三方接口' : 'NovelAI'} 返回 ${status}${suffix}`, ErrorType.NETWORK,
+        );
         default: return new NaiError(`请求失败 ${status}${suffix}`, ErrorType.UNKNOWN);
     }
 }
 
-function wrapFetchError(e) {
+/**
+ * 「请求根本没发出去」在各家浏览器里的说法：
+ * Chromium 是 Failed to fetch，Firefox 是 NetworkError ...，Safari 是 Load failed，
+ * Node 是 fetch failed。
+ */
+const NETWORK_FAILURE = /Failed to fetch|NetworkError|Load failed|fetch failed/i;
+
+function wrapFetchError(e, endpoint) {
     if (e instanceof NaiError) return e;
     if (e?.name === 'AbortError') return new NaiError('请求超时', ErrorType.TIMEOUT);
-    if (String(e?.message || '').includes('Failed to fetch')) {
-        return new NaiError('网络错误', ErrorType.NETWORK);
+    if (NETWORK_FAILURE.test(String(e?.message || ''))) {
+        // 浏览器对「连不上」和「对方没放行跨域」给的是同一句话，分不出来。
+        // 官方地址不存在跨域问题，所以只在第三方地址下把这种可能点出来。
+        return new NaiError(
+            endpoint.custom ? '网络错误：连不上 API 地址，或对方没有允许跨域请求 (CORS)' : '网络错误',
+            ErrorType.NETWORK,
+        );
     }
     return new NaiError(e?.message || '未知错误', ErrorType.UNKNOWN);
+}
+
+/**
+ * 取出本次请求要打的地址。
+ *
+ * 地址填错属于参数非法，和 buildRequestBody 里的校验一个待遇：
+ * 报 CONFIG、点名字段、不发请求。
+ *
+ * @param {object} settings
+ * @param {string[]} [alongside] 要和地址一起校验的其他字段。传进来是为了
+ *        一次把所有出问题的字段都报出来，而不是修好一个才冒出下一个。
+ * @returns {{ url: string, custom: boolean }}
+ */
+function requireEndpoint(settings, alongside = []) {
+    const errors = validateFields(settings, ['apiEndpoint', ...alongside]);
+    if (errors.length) {
+        throw new NaiError(`参数有误 — ${formatErrors(errors)}`, ErrorType.CONFIG);
+    }
+    return {
+        url: resolveEndpoint(settings?.apiEndpoint),
+        custom: isCustomEndpoint(settings?.apiEndpoint),
+    };
+}
+
+/**
+ * 解开响应里的 ZIP。
+ *
+ * 第三方接口最常见的不兼容就在这一步：状态码是 200，回来的却是 JSON 或一张裸图。
+ * 只报「找不到 EOCD」没人看得懂，所以把话说明白。
+ *
+ * @param {ArrayBuffer} buffer
+ * @param {{ url: string, custom: boolean }} endpoint
+ * @returns {Promise<Blob>}
+ */
+async function unzipImage(buffer, endpoint) {
+    try {
+        return await extractImageFromZip(buffer);
+    } catch (e) {
+        const hint = endpoint.custom ? '（第三方接口返回的不是 NovelAI 格式的图片 ZIP）' : '';
+        throw new NaiError(`${e?.message || 'ZIP 解析失败'}${hint}`, ErrorType.PARSE);
+    }
 }
 
 /**
@@ -208,9 +283,11 @@ export function buildRequestBody({ positive, negative, params, characterPrompts 
  */
 export async function generate({ prompt, settings, signal }) {
     if (!settings.apiKey) {
-        throw new NaiError('请先在设置里填入 NovelAI API Key', ErrorType.AUTH);
+        throw new NaiError('请先在设置里填入 API Key', ErrorType.AUTH);
     }
 
+    // 地址和报文字段一起校验：两边都填坏了的话，一次全报出来
+    const endpoint = requireEndpoint(settings, REQUEST_FIELDS);
     const positive = joinTags(settings.positivePrefix, prompt);
     const negative = settings.negativePrefix || '';
     const body = buildRequestBody({ positive, negative, params: settings });
@@ -224,7 +301,7 @@ export async function generate({ prompt, settings, signal }) {
     try {
         if (signal?.aborted) throw new NaiError('已取消', ErrorType.ABORTED);
 
-        const res = await fetch(NAI_ENDPOINT, {
+        const res = await fetch(endpoint.url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -235,16 +312,10 @@ export async function generate({ prompt, settings, signal }) {
         });
 
         if (!res.ok) {
-            throw parseApiError(res.status, await res.text().catch(() => ''));
+            throw parseApiError(res.status, await res.text().catch(() => ''), endpoint);
         }
 
-        const buffer = await res.arrayBuffer();
-        let blob;
-        try {
-            blob = await extractImageFromZip(buffer);
-        } catch (e) {
-            throw new NaiError(e?.message || 'ZIP 解析失败', ErrorType.PARSE);
-        }
+        const blob = await unzipImage(await res.arrayBuffer(), endpoint);
 
         return {
             blob,
@@ -258,7 +329,7 @@ export async function generate({ prompt, settings, signal }) {
     } catch (e) {
         // 用户主动取消和超时长得很像（都是 AbortError），靠外部 signal 区分
         if (signal?.aborted) throw new NaiError('已取消', ErrorType.ABORTED);
-        throw wrapFetchError(e);
+        throw wrapFetchError(e, endpoint);
     } finally {
         clearTimeout(timer);
         signal?.removeEventListener('abort', onAbort);
@@ -291,11 +362,17 @@ const TEST_SIZE = 1024;
  *
  * @param {string} apiKey
  * @param {object} [settings] 用当前设置里的 model / sampler / scheduler，
- *                            这样测试覆盖的就是用户真正会用的那套参数
+ *                            这样测试覆盖的就是用户真正会用的那套参数。
+ *                            apiEndpoint 也从这里取 —— 填了第三方地址的话，
+ *                            测的就是那个地址通不通、兼不兼容。
  * @returns {Promise<{ success: true, bytes: number, seed: number }>}
  */
 export async function testConnection(apiKey, settings = {}) {
     if (!apiKey) throw new NaiError('请先填写 API Key', ErrorType.AUTH);
+
+    // 地址没有「已知可用的值」可以顶替 —— 换成官方就不是在测用户填的那个了。
+    // 所以它和下面的 sampler / scheduler 不同，填坏了就直接报错。
+    const endpoint = requireEndpoint(settings);
 
     // 这是一个诊断请求，要能在面板参数填坏的时候照常验证 Key，
     // 所以 sampler / scheduler 只在用户填了有效值时才沿用，否则用已知可用的值。
@@ -319,7 +396,7 @@ export async function testConnection(apiKey, settings = {}) {
     const timer = setTimeout(() => controller.abort(), TEST_TIMEOUT);
 
     try {
-        const res = await fetch(NAI_ENDPOINT, {
+        const res = await fetch(endpoint.url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -333,13 +410,14 @@ export async function testConnection(apiKey, settings = {}) {
         // 额度不足说明 Key 本身是好的，只是没钱了 —— 对「这个 Key 能不能用」
         // 这个问题来说算通过，UI 那边会单独提示。
         if (res.status === 402) return { success: true, bytes: 0, seed: -1 };
-        if (!res.ok) throw parseApiError(res.status, await res.text().catch(() => ''));
+        if (!res.ok) {
+            throw parseApiError(res.status, await res.text().catch(() => ''), endpoint);
+        }
 
-        const buffer = await res.arrayBuffer();
-        const blob = await extractImageFromZip(buffer);
+        const blob = await unzipImage(await res.arrayBuffer(), endpoint);
         return { success: true, bytes: blob.size, seed: body.parameters.seed };
     } catch (e) {
-        throw wrapFetchError(e);
+        throw wrapFetchError(e, endpoint);
     } finally {
         clearTimeout(timer);
     }

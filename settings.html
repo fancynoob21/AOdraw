@@ -34,10 +34,15 @@
             </div>
             <small id="aod_profile_status" class="notes"></small>
 
+            <label for="aod_api_endpoint">API 地址</label>
+            <input id="aod_api_endpoint" type="text" class="text_pole" spellcheck="false" autocomplete="off"
+                   placeholder="https://image.novelai.net/ai/generate-image">
+            <small id="aod_api_endpoint_hint" class="notes"></small>
+
             <label for="aod_api_key">API Key</label>
             <div class="flex-container">
                 <input id="aod_api_key" type="password" class="text_pole flex1" placeholder="pst-...">
-                <div id="aod_test_key" class="menu_button" title="发一张 1024×1024 / 1 step 的真实请求（Opus 免费额度内）">测试</div>
+                <div id="aod_test_key" class="menu_button" title="向上面的 API 地址发一张 1024×1024 / 1 step 的真实请求（NovelAI 官方下在 Opus 免费额度内）">测试</div>
             </div>
             <small id="aod_test_result" class="notes"></small>
 
@@ -106,7 +111,7 @@
             <h4>测试生图</h4>
             <small class="notes">
                 用<b>上面这些参数</b>真的生成一张图。跟「测试」按钮不同 ——
-                那个只用固定的免费组合验证 Key 能不能用，这个验证你当前这套参数出得来图。
+                那个只用固定的最小组合验证 Key 能不能用，这个验证你当前这套参数出得来图。
             </small>
             <div class="flex-container">
                 <input id="aod_test_prompt" type="text" class="text_pole flex1" placeholder="1girl, smile, cafe">
