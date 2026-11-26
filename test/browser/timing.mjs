@@ -75,7 +75,15 @@ try {
 
         // 给个假 key 并把冷却清零，让 fetch 路径真的被走到
         const s = getSettings();
+        // 这里改的是用户真实的 ST 配置，跑完（或者中途出错）都要原样放回去
+        const saved = {
+            apiKey: s.apiKey, apiEndpoint: s.apiEndpoint,
+            cooldownMin: s.cooldownMin, cooldownMax: s.cooldownMax,
+        };
         s.apiKey = 'pst-dummy-for-test';
+        // 下面的拦截是按 novelai.net 认的，所以必须钉回官方地址 ——
+        // 否则配了第三方地址的话，请求会绕过拦截真的发出去
+        s.apiEndpoint = '';
         s.cooldownMin = 0; s.cooldownMax = 0;
 
         const FULL = '她把手机转过来给你看。[img: 1girl, smile, cafe] "就是这张。"'
@@ -100,23 +108,28 @@ try {
             return realFetch(url, ...rest);
         };
 
-        console.info('SDTEST_MARK chunkOfClose1=' + chunkOf(FULL.indexOf(']')));
-        console.info('SDTEST_MARK chunkOfClose2=' + chunkOf(FULL.lastIndexOf(']')));
+        try {
+            console.info('SDTEST_MARK chunkOfClose1=' + chunkOf(FULL.indexOf(']')));
+            console.info('SDTEST_MARK chunkOfClose2=' + chunkOf(FULL.lastIndexOf(']')));
 
-        await eventSource.emit(event_types.GENERATION_STARTED, 'normal', {}, false);
-        for (let i = 1; i <= CHUNKS; i++) {
-            console.info('SDTEST_CHUNK ' + i);
-            await eventSource.emit(event_types.STREAM_TOKEN_RECEIVED, FULL.slice(0, Math.min(i * step, FULL.length)));
-            await new Promise(r => setTimeout(r, 5));
+            await eventSource.emit(event_types.GENERATION_STARTED, 'normal', {}, false);
+            for (let i = 1; i <= CHUNKS; i++) {
+                console.info('SDTEST_CHUNK ' + i);
+                await eventSource.emit(event_types.STREAM_TOKEN_RECEIVED, FULL.slice(0, Math.min(i * step, FULL.length)));
+                await new Promise(r => setTimeout(r, 5));
+            }
+            const streamEnd = Math.round(performance.now() - t0);
+            console.info('SDTEST_MARK streamEnd=' + streamEnd);
+
+            await new Promise(r => setTimeout(r, 1500)); // 让队列跑完
+            window.fetch = realFetch;
+            await eventSource.emit(event_types.GENERATION_ENDED, 0);
+
+            return { streamEnd, naiAt, naiCalls: naiAt.length };
+        } finally {
+            window.fetch = realFetch;
+            Object.assign(s, saved);
         }
-        const streamEnd = Math.round(performance.now() - t0);
-        console.info('SDTEST_MARK streamEnd=' + streamEnd);
-
-        await new Promise(r => setTimeout(r, 1500)); // 让队列跑完
-        window.fetch = realFetch;
-        await eventSource.emit(event_types.GENERATION_ENDED, 0);
-
-        return { streamEnd, naiAt, naiCalls: naiAt.length };
     `);
 
     // 从 console 流里还原「dispatch 发生在第几个 chunk」

@@ -22,12 +22,14 @@ export {
     DEFAULT_HISTORY_DEPTH, HISTORY_ALL, HISTORY_DEPTH_OPTIONS, hydrateStartIndex,
 } from './history.js';
 export { DEFAULT_MODEL, isKnownModel, MODEL_OPTIONS, resolveModel } from './models.js';
+export { DEFAULT_ENDPOINT, isCustomEndpoint, resolveEndpoint } from './endpoint.js';
 
 export const DEFAULT_SETTINGS = {
     enabled: true,
     pattern: DEFAULT_PATTERN,
 
     // ── NovelAI ──
+    apiEndpoint: '',  // 留空 = NovelAI 官方；填了就改发到这个第三方地址，见 endpoint.js
     apiKey: '',
     model: 'nai-diffusion-5-full',
     positivePrefix: '1.2::misaka12003-gou ::, 0.8::dino(dinoartforame), year 2025, realistic, 4k, 1.3::photorealistic::, 1.3::photo(medium)::, 15::best quality, absurdres, very aesthetic, detailed, masterpiece::,',

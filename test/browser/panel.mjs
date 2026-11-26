@@ -88,12 +88,16 @@ async function main() {
             const s = getSettings();
             window.__saved = JSON.parse(JSON.stringify(s));
             s.apiKey = '';
+            // 钉回官方地址：后面的请求计数是按 novelai.net 认的，免费额度提示也只对官方成立。
+            // 结束时随 __saved 一起还原。
+            s.apiEndpoint = '';
             return true;
         `);
 
         // ── 面板完整性 ──────────────────────────────────────────────────
         check('面板控件齐全', await ev(`
-            const ids = ['aod_enabled','aod_api_key','aod_model','aod_positive','aod_negative',
+            const ids = ['aod_enabled','aod_api_endpoint','aod_api_endpoint_hint','aod_api_key',
+                         'aod_model','aod_positive','aod_negative',
                          'aod_size','aod_steps','aod_scale','aod_seed','aod_sampler','aod_scheduler',
                          'aod_variety_boost','aod_cooldown_min','aod_cooldown_max','aod_timeout',
                          'aod_ttl_days','aod_live_preview','aod_history_depth','aod_pattern',
@@ -184,6 +188,44 @@ async function main() {
             return { hidden: document.getElementById('aod_validation').hidden,
                      reds: document.querySelectorAll('.aod-invalid').length };
         `), v => v.hidden === true && v.reds === 0);
+
+        // ── API 地址 ────────────────────────────────────────────────────
+        // 只动面板、不发请求。结束时地址留在空串（开头钉住的状态），后面的检查不受影响。
+        check('API 地址：写入设置、显示实际请求地址、填错标红、第三方下摘掉免费说法', await ev(`
+            const { getSettings } = await import('${CFG}');
+            const el = document.getElementById('aod_api_endpoint');
+            const hint = document.getElementById('aod_api_endpoint_hint');
+            const size = document.getElementById('aod_size');
+            const freeLabels = () => [...size.options].filter(o => o.textContent.includes('免费')).length;
+            const set = async v => {
+                el.value = v; el.dispatchEvent(new Event('change'));
+                await new Promise(r => setTimeout(r, 80));
+            };
+
+            await set('https://nai.example.com');
+            const third = {
+                stored: getSettings().apiEndpoint, hint: hint.textContent,
+                sizeHint: document.getElementById('aod_size_hint').textContent, free: freeLabels(),
+            };
+
+            await set('nai.example.com');
+            const bad = {
+                red: el.classList.contains('aod-invalid'), hint: hint.textContent,
+                banner: document.getElementById('aod_validation').textContent,
+            };
+
+            await set('');
+            const back = {
+                stored: getSettings().apiEndpoint, free: freeLabels(),
+                reds: document.querySelectorAll('.aod-invalid').length,
+                hidden: document.getElementById('aod_validation').hidden,
+            };
+            return { third, bad, back };
+        `), v => v.third.stored === 'https://nai.example.com'
+              && v.third.hint.includes('https://nai.example.com/ai/generate-image')
+              && v.third.sizeHint.includes('第三方') && v.third.free === 0
+              && v.bad.red && v.bad.hint.includes('❌') && v.bad.banner.includes('API 地址')
+              && v.back.stored === '' && v.back.free === 3 && v.back.reds === 0 && v.back.hidden === true);
 
         // ── 尺寸与免费额度 ──────────────────────────────────────────────
         check('尺寸下拉标出三个免费组合', await ev(`
@@ -287,17 +329,6 @@ async function main() {
             return out;
         `), v => v.d5 === 6 && v.d0 === 1 && v.all === 12 && v.oldFloorOnDemand === true);
 
-        // ── 还原 ────────────────────────────────────────────────────────
-        const restored = await ev(`
-            const { getSettings, saveSettings } = await import('${CFG}');
-            const s = getSettings();
-            Object.assign(s, window.__saved);
-            saveSettings();
-            return { model: s.model, steps: s.steps, size: s.width + 'x' + s.height,
-                     depth: s.historyDepth, keyRestored: !!s.apiKey };
-        `);
-        console.log('已还原设置:', JSON.stringify(restored));
-
         console.log('');
         let failed = 0;
         for (const r of results) {
@@ -307,6 +338,29 @@ async function main() {
         console.log(`\n${results.length - failed}/${results.length} passed`);
         process.exitCode = failed ? 1 : 0;
     } finally {
+        // ── 还原 ────────────────────────────────────────────────────────
+        // 放在 finally 里：中途哪一步抛了异常，也不能把用户真实的 ST 配置留在
+        // 被改动的状态（Key 被摘掉、API 地址被钉回官方）。
+        // 限时是因为浏览器要是已经挂了，这个调用永远等不到回音。
+        const restored = await Promise.race([
+            ev(`
+                if (!window.__saved) return false; // 还没走到改设置那一步
+                const { getSettings, saveSettings } = await import('${CFG}');
+                const s = getSettings();
+                Object.assign(s, window.__saved);
+                saveSettings();
+                return { model: s.model, steps: s.steps, size: s.width + 'x' + s.height,
+                         depth: s.historyDepth, keyRestored: !!s.apiKey,
+                         endpointRestored: s.apiEndpoint === window.__saved.apiEndpoint };
+            `),
+            sleep(5000),
+        ]).catch(() => undefined);
+        if (restored) console.log('已还原设置:', JSON.stringify(restored));
+        else if (restored === undefined) {
+            console.log('⚠ 没能确认设置已还原（浏览器可能没起来）。'
+                + '如果测试已经跑过一部分，请检查 ST 里 AOdraw 的 API Key / API 地址');
+        }
+
         try { ws?.close(); } catch { /* 已经关了 */ }
         chrome.kill();
     }

@@ -149,6 +149,10 @@ async function main() {
             const s = getSettings();
             window.__savedKey = s.apiKey;
             s.apiKey = 'pst-mock-for-streaming-test';
+            // 下面的拦截是按 novelai.net 认的，所以必须钉回官方地址 ——
+            // 否则配了第三方地址的话，请求会绕过拦截真的发出去
+            window.__savedEndpoint = s.apiEndpoint;
+            s.apiEndpoint = '';
             s.livePreview = true;
             s.enabled = true;
             saveSettings();
@@ -285,17 +289,6 @@ async function main() {
             }
         }
 
-        // ── 还原 ────────────────────────────────────────────────────────
-        await ev(`
-            const { getSettings, saveSettings } =
-                await import('/scripts/extensions/third-party/${EXT_DIR}/src/config.js');
-            const s = getSettings();
-            s.apiKey = window.__savedKey;
-            saveSettings();
-            if (window.__realFetch) window.fetch = window.__realFetch;
-            return true;
-        `).catch(() => {});
-
         console.log('');
         let failed = 0;
         for (const r of results) {
@@ -311,6 +304,25 @@ async function main() {
 
         process.exitCode = failed ? 1 : 0;
     } finally {
+        // ── 还原 ────────────────────────────────────────────────────────
+        // 放在 finally 里：中途哪一步抛了异常，也不能把用户真实的 ST 配置留在
+        // 被改动的状态（Key 换成了假的、API 地址被钉回官方）。
+        // 限时是因为浏览器要是已经挂了，这个调用永远等不到回音。
+        await Promise.race([
+            ev(`
+                if (!('__savedKey' in window)) return false; // 还没走到改设置那一步
+                const { getSettings, saveSettings } =
+                    await import('/scripts/extensions/third-party/${EXT_DIR}/src/config.js');
+                const s = getSettings();
+                s.apiKey = window.__savedKey;
+                s.apiEndpoint = window.__savedEndpoint ?? '';
+                saveSettings();
+                if (window.__realFetch) window.fetch = window.__realFetch;
+                return true;
+            `),
+            sleep(5000),
+        ]).catch(() => {});
+
         try { ws?.close(); } catch { /* 已经关了 */ }
         chrome.kill();
         await mock.close();

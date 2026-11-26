@@ -12,8 +12,8 @@ import { callGenericPopup, POPUP_TYPE } from '../../../popup.js';
 import * as cache from './src/cache.js';
 import {
     DEFAULT_PATTERN, FREE_STEPS_LIMIT, getSettings, HISTORY_DEPTH_OPTIONS,
-    invalidatePattern, isFreeTier, LOG_PREFIX, MODEL_OPTIONS, saveSettings,
-    SIZE_OPTIONS, sizeValueOf,
+    invalidatePattern, isCustomEndpoint, isFreeTier, LOG_PREFIX, MODEL_OPTIONS, resolveEndpoint,
+    saveSettings, SIZE_OPTIONS, sizeValueOf,
 } from './src/config.js';
 import { generate, testConnection } from './src/nai-client.js';
 import {
@@ -21,7 +21,7 @@ import {
     getActiveProfile, isActiveProfileDirty, PROFILE_FIELDS, renameProfile,
     saveCurrentToActiveProfile,
 } from './src/profiles.js';
-import { formatErrors, validateFields } from './src/validate.js';
+import { formatErrors, validateField, validateFields } from './src/validate.js';
 import * as pipeline from './src/pipeline.js';
 import { hydrateAll } from './src/renderer.js';
 import { install as installWiring } from './src/wiring.js';
@@ -127,6 +127,7 @@ nsfw, 2girls 1boy,indoor, sex hotel, luxurious bedroom, dim light, rough sex, nu
 /** 输入控件 id → 设置键 + 类型 */
 const FIELDS = [
     ['aod_enabled', 'enabled', 'bool'],
+    ['aod_api_endpoint', 'apiEndpoint', 'str'],
     ['aod_api_key', 'apiKey', 'str'],
     ['aod_model', 'model', 'str'],
     ['aod_positive', 'positivePrefix', 'str'],
@@ -205,6 +206,10 @@ function bindSettingsUI() {
             if (key === 'pattern' || key === 'enabled' || key === 'historyDepth') hydrateAll();
             if (PROFILE_FIELD_SET.has(key)) hydrateAll();
             if (key === 'steps') updateSizeHint(); // 免费额度还取决于 steps
+            if (key === 'apiEndpoint') {
+                updateEndpointHint();
+                updateSizeHint(); // 免费额度的说法只对官方地址成立
+            }
         });
     }
 
@@ -232,9 +237,34 @@ function syncSettingsControls() {
     const size = /** @type {HTMLSelectElement} */ (document.getElementById('aod_size'));
     if (size) size.value = sizeValueOf(settings);
 
+    updateEndpointHint();
     updateSizeHint();
     refreshValidation();
     refreshProfileUI();
+}
+
+/**
+ * API 地址下面那行提示：把**实际会请求的地址**摆出来。
+ *
+ * 只填域名时我们会补上生图路径，这一步不能在背后悄悄做 —— 用户得看得见
+ * 最后到底打到哪里去了。顺带点明 Key 也会跟着发到这个地址。
+ */
+function updateEndpointHint() {
+    const hint = document.getElementById('aod_api_endpoint_hint');
+    if (!hint) return;
+
+    const raw = getSettings().apiEndpoint;
+    const error = validateField('apiEndpoint', raw);
+
+    if (error) {
+        hint.textContent = `❌ ${error.message}。`;
+    } else if (isCustomEndpoint(raw)) {
+        hint.textContent = `实际请求：${resolveEndpoint(raw)} —— API Key 会发往这个地址。`
+            + '对方需要兼容 NovelAI 的生图接口（同样的报文，返回图片 ZIP）。';
+    } else {
+        hint.textContent = '留空使用 NovelAI 官方地址。'
+            + '用第三方中转就填它的地址，只填域名会自动补上 /ai/generate-image。';
+    }
 }
 
 /** 模型下拉，同样要先填好选项 */
@@ -440,20 +470,26 @@ function bindTestGenerate() {
 
         const prompt = input.value.trim() || input.placeholder;
         const free = isFreeTier(settings);
+        // 免费额度 / Anlas 是 NovelAI 官方的计费规则；第三方怎么收费我们不知道，就不乱说
+        const custom = isCustomEndpoint(settings.apiEndpoint);
 
         button.classList.add('disabled');
         preview.hidden = true;
         preview.replaceChildren();
-        out.textContent = free ? '生成中（免费额度内）...' : '生成中（会消耗 Anlas）...';
+        if (custom) out.textContent = '生成中（第三方地址）...';
+        else out.textContent = free ? '生成中（免费额度内）...' : '生成中（会消耗 Anlas）...';
 
         const startedAt = Date.now();
         try {
             const { blob, meta } = await generate({ prompt, settings });
             const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
 
+            let billing = free ? ' · 免费' : ' · 已消耗 Anlas';
+            if (custom) billing = ' · 第三方地址';
+
             out.textContent = `✅ ${meta.width}×${meta.height} · seed ${meta.seed} · `
                 + `${(blob.size / 1024).toFixed(0)} KB · 用时 ${seconds}s`
-                + (free ? ' · 免费' : ' · 已消耗 Anlas');
+                + billing;
 
             const img = document.createElement('img');
             // 预览是一次性的，页面刷新就没了；不进缓存，免得污染正文用的那套 hash
@@ -506,12 +542,39 @@ function bindSizeSelect() {
     updateSizeHint();
 }
 
-/** 免费额度同时取决于尺寸和 steps，所以两边改动都要刷新这行提示 */
+/**
+ * 尺寸选项上的「· 免费」标签。
+ *
+ * 那是 NovelAI 官方的计费规则，用第三方地址时要摘掉 —— 否则下拉里写着免费，
+ * 下面的提示行又说计费以对方为准，自相矛盾。
+ */
+function refreshSizeLabels(custom) {
+    const select = /** @type {HTMLSelectElement} */ (document.getElementById('aod_size'));
+    if (!select) return;
+
+    for (const el of select.options) {
+        const option = SIZE_OPTIONS.find(o => o.value === el.value);
+        if (!option) continue;
+        el.textContent = option.free && !custom ? `${option.label} · 免费` : option.label;
+    }
+}
+
+/**
+ * 免费额度同时取决于尺寸和 steps，所以两边改动都要刷新这行提示。
+ * 它还取决于请求发给谁，所以 API 地址改动时也会走到这里。
+ */
 function updateSizeHint() {
+    const settings = getSettings();
+    refreshSizeLabels(isCustomEndpoint(settings.apiEndpoint));
+
     const hint = document.getElementById('aod_size_hint');
     if (!hint) return;
 
-    const settings = getSettings();
+    if (isCustomEndpoint(settings.apiEndpoint)) {
+        // Opus 免费额度是 NovelAI 官方的规则，套不到第三方头上
+        hint.textContent = 'ℹ️ 正在使用第三方 API 地址，是否计费以对方为准。';
+        return;
+    }
     if (isFreeTier(settings)) {
         hint.textContent = `✅ Opus 订阅下这个组合是无限免费的（steps ≤ ${FREE_STEPS_LIMIT}）。`;
         return;
@@ -533,10 +596,14 @@ async function onTestKey() {
     try {
         const settings = getSettings();
         const r = await testConnection(settings.apiKey, settings);
+        const noQuota = isCustomEndpoint(settings.apiEndpoint)
+            ? '⚠️ Key 有效，但额度不足'
+            : '⚠️ Key 有效，但 Anlas 不足';
         out.textContent = r.bytes > 0
             // 走通到这里意味着认证、报文形状、ZIP 解包三段全部验证过了
+            // （填了第三方地址的话，还包括「这个地址通、且兼容 NovelAI 的接口」）
             ? `✅ Key 有效，已成功生成并解包一张图（${(r.bytes / 1024).toFixed(0)} KB）`
-            : '⚠️ Key 有效，但 Anlas 不足';
+            : noQuota;
     } catch (e) {
         out.textContent = `❌ ${e?.message || '失败'}`;
     } finally {

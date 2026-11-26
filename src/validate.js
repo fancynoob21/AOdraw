@@ -11,16 +11,19 @@
 // 本文件不引 SillyTavern，可在 node 下单测。
 // ════════════════════════════════════════════════════════════════════════════
 
+import { resolveEndpoint } from './endpoint.js';
+
 /**
  * @typedef {object} FieldSpec
  * @property {string} label   报错时显示的字段名
- * @property {'int'|'number'|'string'} type
+ * @property {'int'|'number'|'string'|'url'} type
  * @property {number} [min]
  * @property {number} [max]
  */
 
 /** @type {Record<string, FieldSpec>} */
 export const FIELD_SPECS = {
+    apiEndpoint: { label: 'API 地址', type: 'url' },
     model: { label: '模型', type: 'string' },
     width: { label: '宽', type: 'int', min: 64, max: 2048 },
     height: { label: '高', type: 'int', min: 64, max: 2048 },
@@ -62,6 +65,14 @@ export function validateField(key, value) {
     if (!spec) return null;
 
     const fail = (message) => ({ key, label: spec.label, message });
+
+    // API 地址是唯一允许留空的字段：留空的含义就是「用 NovelAI 官方」，
+    // 面板上也是这么写的，所以这不算回落。填了但不合法照样报错。
+    if (spec.type === 'url') {
+        return resolveEndpoint(value) === null
+            ? fail('必须是 http:// 或 https:// 开头的完整地址，且不能带账号密码')
+            : null;
+    }
 
     // 留空一律算错，绝不回落到默认值
     if (value === '' || value === null || value === undefined) {
